@@ -1,0 +1,248 @@
+{
+  "_readme": "Copy this file to keywords.json and edit it. Each key must exactly match a subfolder name inside your TEMPLATE_BASE (case-insensitive). Values are keyword lists matched against the job title (3x weight) and description (1x weight).",
+
+  "Finance": [
+    "finance", "financial", "fp&a", "financial planning", "financial analysis",
+    "financial analyst", "finance analyst", "finance manager", "finance business partner",
+    "treasury", "treasurer", "cash management", "liquidity", "working capital",
+    "budget", "budgeting", "forecast", "forecasting", "planning and analysis",
+    "corporate finance", "business finance", "group finance", "commercial finance",
+    "valuation", "financial modelling", "financial reporting", "management reporting",
+    "variance analysis", "cost analysis", "cost control", "cost management",
+    "credit", "credit analysis", "credit risk", "credit manager",
+    "controller", "financial controller", "group controller",
+    "cfo", "chief financial officer", "vice president finance"
+  ],
+
+  "Investment": [
+    "investment", "investments", "investor relations", "investor",
+    "portfolio", "portfolio management", "portfolio manager", "portfolio analyst",
+    "asset management", "asset manager", "fund manager",
+    "equity", "equities", "equity analyst", "equity research", "equity investment",
+    "real estate", "real assets", "property investment", "real estate investment",
+    "infrastructure investment", "infrastructure fund",
+    "capital markets", "capital allocation",
+    "wealth management", "wealth manager", "private wealth", "financial adviser",
+    "financial advisor", "financial planner", "financial planning",
+    "research analyst", "buy side", "sell side"
+  ],
+
+  "M&A": [
+    "m&a", "mergers", "mergers and acquisitions", "merger", "acquisition", "acquisitions",
+    "deal", "deals", "dealmaking", "transaction", "transactions",
+    "due diligence", "commercial due diligence", "financial due diligence",
+    "leveraged buyout", "lbo", "management buyout", "mbo",
+    "corporate development", "strategic transactions", "business combination",
+    "integration", "post-merger integration", "divestiture", "divestment",
+    "joint venture", "carve-out", "spin-off"
+  ],
+
+  "Accounting": [
+    "account", "accounting", "accountant", "accounts",
+    "audit", "auditor", "external audit", "internal audit", "assurance",
+    "tax", "taxation", "tax accountant", "tax manager", "transfer pricing", "indirect tax",
+    "bookkeep", "bookkeeper", "bookkeeping",
+    "controller", "assistant controller",
+    "cpa", "chartered accountant", "ca",
+    "reconciliation", "reconciliations", "bank reconciliation",
+    "accounts payable", "accounts receivable", "a/p", "a/r",
+    "payroll", "general ledger", "gl", "journal entries",
+    "statutory reporting", "financial statements", "ifrs", "gaap",
+    "management accounts", "month-end", "year-end close"
+  ],
+
+  "Fund Accounting": [
+    "fund accounting", "fund accountant",
+    "nav", "net asset value", "nav calculation",
+    "unit pricing", "unit registry",
+    "fund administration", "fund operations", "fund services",
+    "reconciliation", "portfolio reconciliation", "trade reconciliation",
+    "custody", "custodian", "trustee",
+    "hedge fund", "mutual fund", "unit trust",
+    "transfer agency", "investor services",
+    "performance measurement", "attribution"
+  ],
+
+  "Fixed Income": [
+    "fixed income", "fixed income analyst", "fixed income research",
+    "bond", "bonds", "bond analyst", "bond trader",
+    "debt", "debt capital markets", "dcm", "debt securities",
+    "yield", "duration", "convexity", "coupon",
+    "sovereign debt", "government bonds", "gilts", "treasuries",
+    "corporate bonds", "high yield", "investment grade",
+    "credit analysis", "credit research", "credit analyst",
+    "rates", "interest rates", "rate strategy",
+    "money market", "repo", "securitisation", "abs", "mbs",
+    "structured finance", "structured credit"
+  ],
+
+  "Derivatives": [
+    "derivatives", "derivative", "derivatives analyst", "derivatives trader",
+    "options", "option pricing", "equity options", "fx options",
+    "futures", "commodity futures",
+    "swaps", "interest rate swaps", "irs", "credit default swap", "cds",
+    "forwards", "fx forwards",
+    "structured products", "structured notes", "exotic derivatives",
+    "hedging", "hedge", "risk hedging",
+    "volatility", "vol trading", "implied volatility",
+    "pricing", "quantitative", "quant analyst", "quant"
+  ],
+
+  "Trading": [
+    "trading", "trader", "equity trader", "equities trading",
+    "sales and trading", "s&t",
+    "market making", "market maker",
+    "algorithmic trading", "algo trading", "systematic trading",
+    "quantitative trading", "quant trader", "quant trading",
+    "prop trading", "proprietary trading",
+    "execution", "execution trader", "order management",
+    "electronic trading", "high frequency trading", "hft",
+    "flow trading", "multi-asset trading"
+  ],
+
+  "Energy Trading": [
+    "energy trading", "energy trader",
+    "power trading", "power trader", "electricity trading",
+    "gas trading", "natural gas trading", "lng trading",
+    "oil trading", "crude oil", "petroleum",
+    "commodity trading", "commodity trader", "commodities",
+    "carbon trading", "emissions trading", "carbon credits",
+    "energy markets", "wholesale energy", "spot market",
+    "scheduling", "dispatch", "nominations"
+  ],
+
+  "Energy FP&A": [
+    "energy fp&a", "energy finance", "energy analyst", "energy financial analyst",
+    "energy planning", "energy economics",
+    "oil and gas", "oil & gas", "upstream", "downstream", "midstream",
+    "lng", "liquefied natural gas",
+    "power", "utilities", "electricity", "renewables", "renewable energy",
+    "solar", "wind", "battery storage",
+    "energy sector", "energy industry",
+    "production finance", "asset finance", "project economics"
+  ],
+
+  "Economics": [
+    "economist", "economics", "economic analyst", "economic research",
+    "macroeconomics", "macroeconomic", "macro analyst",
+    "microeconomics", "microeconomic",
+    "econometrics", "econometric modelling",
+    "economic policy", "policy economist", "policy analysis",
+    "economic modelling", "economic forecasting",
+    "economic advisory", "economic consulting",
+    "labour economics", "regulatory economics", "competition economics"
+  ],
+
+  "ESG": [
+    "esg", "environmental social governance",
+    "sustainability", "sustainable", "sustainability analyst", "sustainability manager",
+    "responsible investment", "responsible investing", "sri",
+    "impact investing", "impact measurement",
+    "climate", "climate change", "climate risk", "climate finance",
+    "net zero", "carbon neutral", "decarbonisation",
+    "carbon", "carbon footprint", "scope 1", "scope 2", "scope 3",
+    "green finance", "sustainable finance", "green bonds",
+    "tcfd", "sfdr", "esg reporting", "esg integration",
+    "socially responsible", "corporate social responsibility", "csr"
+  ],
+
+  "Marketing": [
+    "marketing", "marketing manager", "marketing analyst", "marketing coordinator",
+    "brand", "brand manager", "brand strategist", "brand marketing",
+    "campaign", "campaign manager", "campaign marketing",
+    "communications", "marketing communications", "marcomms",
+    "product marketing", "go-to-market", "gtm",
+    "consumer insights", "market research", "customer insights",
+    "trade marketing", "shopper marketing",
+    "content marketing", "content strategy",
+    "growth", "growth marketing", "growth manager",
+    "b2b marketing", "b2c marketing", "demand generation"
+  ],
+
+  "Digital Marketing": [
+    "digital marketing", "digital analyst", "digital strategist",
+    "seo", "search engine optimisation", "search engine optimization",
+    "sem", "search engine marketing", "paid search", "ppc", "google ads",
+    "social media", "social media manager", "social media marketing",
+    "paid social", "facebook ads", "meta ads", "linkedin ads",
+    "content", "content creator", "copywriter", "copy",
+    "email marketing", "crm marketing", "lifecycle marketing",
+    "programmatic", "display advertising", "media buying",
+    "analytics", "web analytics", "google analytics", "adobe analytics",
+    "conversion rate optimisation", "cro", "a/b testing",
+    "affiliate marketing", "influencer marketing",
+    "e-commerce", "ecommerce", "marketplace"
+  ],
+
+  "Sales": [
+    "sales", "sales manager", "sales representative", "sales executive",
+    "business development", "business development manager", "bdm",
+    "account manager", "account executive", "account director",
+    "key account", "national account",
+    "revenue", "revenue growth", "new business",
+    "client acquisition", "client management", "client relationships",
+    "b2b sales", "enterprise sales", "smb sales",
+    "inside sales", "field sales", "outbound sales",
+    "crm", "salesforce", "pipeline management",
+    "partnerships", "channel sales", "channel management"
+  ],
+
+  "Operations": [
+    "operations", "operations manager", "operations analyst",
+    "supply chain", "supply chain manager", "supply chain analyst",
+    "logistics", "logistics manager", "logistics coordinator",
+    "procurement", "purchasing", "sourcing", "strategic sourcing",
+    "inventory", "inventory management", "demand planning",
+    "warehouse", "distribution", "fulfillment",
+    "process improvement", "lean", "six sigma", "continuous improvement",
+    "project management", "program management", "project manager",
+    "business operations", "business analyst",
+    "strategy and operations", "chief of staff"
+  ],
+
+  "Human Resources": [
+    "human resources", "hr", "hr manager", "hr business partner", "hrbp",
+    "talent acquisition", "talent management", "recruiting", "recruiter", "recruitment",
+    "people and culture", "people operations", "people partner",
+    "learning and development", "l&d", "training",
+    "compensation", "benefits", "total rewards", "remuneration",
+    "organisational development", "org design",
+    "employee relations", "industrial relations",
+    "workforce planning", "headcount planning",
+    "payroll", "hris", "workday hr"
+  ],
+
+  "Legal": [
+    "legal", "lawyer", "attorney", "solicitor", "counsel",
+    "corporate law", "corporate counsel", "in-house counsel", "general counsel",
+    "contracts", "contract management", "contract drafting",
+    "compliance", "compliance officer", "compliance manager", "regulatory compliance",
+    "regulatory", "regulation", "regulatory affairs",
+    "litigation", "dispute resolution",
+    "employment law", "commercial law", "transactional",
+    "intellectual property", "ip", "privacy", "data privacy", "gdpr"
+  ],
+
+  "Technology": [
+    "software engineer", "software developer", "developer", "engineer",
+    "backend", "frontend", "full stack", "fullstack",
+    "data engineer", "data scientist", "data analyst", "machine learning",
+    "product manager", "product owner", "product",
+    "devops", "cloud", "aws", "azure", "gcp",
+    "cybersecurity", "security engineer", "information security",
+    "it manager", "it analyst", "systems analyst",
+    "database", "sql", "python", "java", "javascript",
+    "mobile", "ios", "android", "react", "node"
+  ],
+
+  "Consulting": [
+    "consulting", "consultant", "management consulting", "strategy consulting",
+    "advisory", "advisor", "strategic advisor",
+    "strategy", "strategy analyst", "strategy manager",
+    "transformation", "change management",
+    "business consulting", "management consultant",
+    "analyst", "associate consultant", "senior consultant", "principal",
+    "big four", "deloitte", "pwc", "kpmg", "ey",
+    "client advisory", "client engagement", "engagement manager"
+  ]
+}

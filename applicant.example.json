@@ -1,0 +1,88 @@
+{
+  "first_name": "Alex",
+  "last_name": "Johnson",
+  "email": "alex.johnson@email.com",
+  "phone": "2125550142",
+  "phone_country_code": "+1",
+  "address": {
+    "street": "245 West 34th Street",
+    "suburb": "Midtown Manhattan",
+    "city": "New York",
+    "state": "New York",
+    "state_abbr": "NY",
+    "postcode": "10001",
+    "country": "United States"
+  },
+  "linkedin": "https://www.linkedin.com/in/alex-johnson/",
+  "website": "https://alexjohnsonportfolio.com",
+  "visa": {
+    "type": "US Citizen",
+    "expiry": null,
+    "authorized_to_work": true,
+    "requires_future_sponsorship": false,
+    "note": "US Citizen with full working rights."
+  },
+  "referral_source": "LinkedIn",
+  "work_experience": [
+    {
+      "title": "Senior Marketing Manager",
+      "company": "Ogilvy",
+      "start": "03/2022",
+      "end": "Present",
+      "description": "Led integrated marketing campaigns across digital and traditional channels for Fortune 500 clients. Managed a $4M annual media budget and a team of 6 across content, paid media, and brand. Grew client social media engagement by 38% YoY through data-driven content strategy."
+    },
+    {
+      "title": "Digital Marketing Strategist",
+      "company": "BBDO",
+      "start": "06/2019",
+      "end": "02/2022",
+      "description": "Developed and executed SEO, SEM, and paid social strategies for consumer goods and retail clients. Managed Google Ads and Meta campaigns with combined monthly spend of $800K. Improved average campaign ROAS from 2.1x to 3.6x through continuous A/B testing and audience segmentation."
+    },
+    {
+      "title": "Marketing Analyst",
+      "company": "Unilever",
+      "start": "08/2017",
+      "end": "05/2019",
+      "description": "Conducted consumer research and market analysis to inform brand positioning for two personal care product lines. Built reporting dashboards in Tableau to track campaign KPIs across 12 markets. Coordinated agency briefings and supported campaign production timelines."
+    },
+    {
+      "title": "Marketing Coordinator",
+      "company": "Grey Global Group",
+      "start": "01/2016",
+      "end": "07/2017",
+      "description": "Supported campaign planning and execution for FMCG and healthcare clients. Managed social media scheduling, influencer outreach, and content calendar across Instagram, LinkedIn, and Twitter. Assisted in quarterly brand audits and competitor benchmarking."
+    }
+  ],
+  "education": [
+    {
+      "institution": "Columbia University",
+      "degree": "Master of Science",
+      "field": "Marketing Science",
+      "start": "09/2014",
+      "end": "05/2016",
+      "gpa": "3.8/4.0"
+    },
+    {
+      "institution": "University of Michigan",
+      "degree": "Bachelor of Business Administration",
+      "field": "Marketing & Communications",
+      "start": "09/2010",
+      "end": "05/2014",
+      "gpa": "3.6/4.0"
+    }
+  ],
+  "certifications": [
+    "Google Ads Certified — Search, Display, Video",
+    "HubSpot Inbound Marketing Certification",
+    "Meta Blueprint Certified — Media Planning Professional",
+    "Salesforce Marketing Cloud Email Specialist"
+  ],
+  "skills": [
+    "Brand Strategy", "Campaign Management", "Content Marketing",
+    "SEO", "SEM", "Paid Social", "Google Ads", "Meta Ads",
+    "Email Marketing", "CRM", "Marketing Automation",
+    "Google Analytics", "Tableau", "Salesforce",
+    "A/B Testing", "Audience Segmentation", "Market Research",
+    "Copywriting", "Creative Briefing", "Agency Management"
+  ]
+}

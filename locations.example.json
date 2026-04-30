@@ -1,0 +1,85 @@
+{
+  "_readme": "Copy this file to locations.json and edit it. Each key must exactly match a profile name in your PROFILES config (case-sensitive). Values are location strings matched against the country/city detected from the job posting.",
+
+  "Australia": [
+    "australia",
+    "sydney", "new south wales", "nsw",
+    "melbourne", "victoria", "vic",
+    "brisbane", "queensland", "qld",
+    "perth", "western australia", "wa",
+    "adelaide", "south australia", "sa",
+    "canberra", "act",
+    "hobart", "tasmania", "tas",
+    "darwin", "northern territory", "nt"
+  ],
+
+  "Malaysia": [
+    "malaysia",
+    "kuala lumpur", "kl", "wilayah persekutuan",
+    "selangor", "shah alam", "petaling jaya", "subang",
+    "penang", "george town",
+    "johor", "johor bahru", "jb",
+    "sabah", "kota kinabalu",
+    "sarawak", "kuching"
+  ],
+
+  "Singapore": [
+    "singapore", "sg"
+  ],
+
+  "United Kingdom": [
+    "united kingdom", "uk", "great britain", "britain",
+    "london", "england",
+    "manchester", "birmingham", "leeds", "liverpool",
+    "bristol", "oxford", "cambridge", "reading",
+    "edinburgh", "glasgow", "scotland",
+    "cardiff", "wales"
+  ],
+
+  "United States": [
+    "united states", "usa", "us", "america",
+    "new york", "ny", "nyc",
+    "san francisco", "sf", "bay area", "silicon valley",
+    "los angeles", "la", "california", "ca",
+    "chicago", "illinois",
+    "boston", "massachusetts",
+    "seattle", "washington state",
+    "austin", "texas", "tx",
+    "denver", "colorado",
+    "miami", "florida",
+    "atlanta", "georgia"
+  ],
+
+  "Canada": [
+    "canada",
+    "toronto", "ontario",
+    "vancouver", "british columbia", "bc",
+    "montreal", "quebec",
+    "calgary", "alberta",
+    "ottawa"
+  ],
+
+  "Hong Kong": [
+    "hong kong", "hk", "hong kong sar"
+  ],
+
+  "Japan": [
+    "japan",
+    "tokyo", "osaka", "kyoto", "nagoya", "yokohama"
+  ],
+
+  "Germany": [
+    "germany", "deutschland",
+    "frankfurt", "munich", "münchen", "berlin", "hamburg", "düsseldorf"
+  ],
+
+  "UAE": [
+    "uae", "united arab emirates",
+    "dubai", "abu dhabi", "sharjah"
+  ],
+
+  "India": [
+    "india",
+    "mumbai", "bangalore", "bengaluru", "delhi", "hyderabad", "pune", "chennai"
+  ]
+}

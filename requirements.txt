@@ -1,0 +1,8 @@
+anthropic
+python-docx
+docx2pdf
+pypdf
+python-dotenv
+playwright
+pywin32
+questionary

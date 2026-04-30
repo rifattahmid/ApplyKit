@@ -1,0 +1,181 @@
+# Project Memory — Auto Resume & Cover Letter Generator
+
+Use this file to onboard a new Claude instance. Paste it at the start of your chat, then describe the issue or task.
+
+---
+
+## What this project does
+
+Given a job posting URL, automatically:
+1. Scrapes the job title, company, country, and description using Playwright + Claude Haiku
+2. Auto-detects the job country, matches against `locations.json`
+3. Shows an arrow-key country selector (pre-selected to detected or `DEFAULT_PROFILE`)
+4. Classifies the role against template subfolders using a keyword scorer (`keywords.json`)
+5. Copies the matching resume template to an output folder
+6. Fills `_` blanks in the cover letter template using Claude Haiku — only the sentence(s) containing `_`, everything else untouched
+7. Converts `.docx` to PDF via Microsoft Word and opens the output folder
+
+---
+
+## File structure
+
+```
+auto-resume-cover-letter/
+├── apply.py                # Entry point — scrape, country select, generate
+├── scraper.py              # Playwright scraper — extracts job data including country
+├── generator.py            # Classifier + cover letter filler + PDF conversion
+├── config.py               # USER-SPECIFIC settings (gitignored)
+├── config.example.py       # Template for config.py
+├── applicant.json          # USER-SPECIFIC candidate profile (gitignored)
+├── applicant.example.json  # Example with fictional marketing candidate
+├── keywords.json           # USER-SPECIFIC keyword map (gitignored)
+├── keywords.example.json   # Extensive example covering 18+ job categories
+├── locations.json          # USER-SPECIFIC country/city location map (gitignored)
+├── locations.example.json  # Example covering 11 countries
+├── requirements.txt        # anthropic, python-docx, docx2pdf, pypdf, python-dotenv, playwright, pywin32, questionary
+├── .env                    # ANTHROPIC_API_KEY (gitignored)
+└── .gitignore
+```
+
+---
+
+## config.py — structure
+
+```python
+# Single country (simple)
+OUTPUT_BASE               # path where generated folders are saved
+TEMPLATE_BASE             # path to template subfolders
+SUPPLEMENTARY_FILES       # extra PDFs uploaded alongside resume
+BUNDLE_APPENDIX           # PDFs merged into cover letter bundle PDF
+
+# Multi-country (optional — enables arrow-key country selector)
+DEFAULT_PROFILE = "Malaysia"
+PROFILES = {
+    "Malaysia":  { "OUTPUT_BASE": ..., "TEMPLATE_BASE": ... },
+    "Australia": { "OUTPUT_BASE": ..., "TEMPLATE_BASE": ... },
+    "Singapore": { "OUTPUT_BASE": ..., "TEMPLATE_BASE": ... },
+    "Canada":    { "OUTPUT_BASE": ..., "TEMPLATE_BASE": ... },
+    "Brunei":    { "OUTPUT_BASE": ..., "TEMPLATE_BASE": ... },
+}
+# Fallback (auto-set from DEFAULT_PROFILE)
+OUTPUT_BASE   = PROFILES[DEFAULT_PROFILE]["OUTPUT_BASE"]
+TEMPLATE_BASE = PROFILES[DEFAULT_PROFILE]["TEMPLATE_BASE"]
+```
+
+---
+
+## apply.py — runtime flow
+
+1. Prompt for job URL
+2. `scrape_job(url)` → returns `data` dict including `country`
+3. If `PROFILES` defined in config:
+   - `_load_locations()` reads `locations.json` from project root
+   - `_detect_profile(country, locations)` matches country string against location lists
+   - `questionary.select` menu shown, pre-selected to detected (or `DEFAULT_PROFILE`)
+   - `config.OUTPUT_BASE` and `config.TEMPLATE_BASE` overridden with chosen profile
+4. User confirms/corrects company name
+5. `generate_application(data)` called
+
+---
+
+## generator.py — key functions
+
+**`_load_keywords()`**
+Reads `keywords.json` from project root. Returns dict keyed by lowercase folder name. Warns if file missing.
+
+**`classify_job(title, description)`**
+Scores available template subfolders against keywords. Title matches x3 weight. Tie-break: prefer folders with title evidence first, then by priority order. Prints score table to terminal.
+
+**`fill_cover_letter(path, company, title, intro, responsibilities, qualifications)`**
+- Finds all paragraphs containing `_`
+- Splits each paragraph into sentences using `re.split(r'(?<=[.!?])\s+(?=[A-Z])', ...)`
+- Sends ONLY the sentence(s) containing `_` to Claude Haiku
+- Claude fills blank with company/role-specific content — does not touch other words
+- Splices filled sentence back into full paragraph
+- Preserves bold formatting on job title
+- No em dashes in output (enforced in prompt)
+
+**`generate_application(data)`**
+Orchestrates: classify -> copy templates -> fill cover letter -> convert to PDF -> merge bundle -> open output folder.
+
+---
+
+## scraper.py — key logic
+
+**`scrape_job(url)`**
+Headless Edge, navigates to URL, dismisses cookie popups, extracts raw text + PDF bytes. Passes text to Claude Haiku to extract structured JSON:
+- `title`, `company`, `country` (null if not determinable), `intro`, `responsibilities`, `qualifications`
+
+All fields returned in the data dict. `country` drives profile detection in `apply.py`.
+
+URL-based fallback for company/title extraction: Workday (`*.wd*.myworkdayjobs.com`), Greenhouse (`boards.greenhouse.io`), Lever (`jobs.lever.co`).
+
+---
+
+## locations.json format
+
+```json
+{
+  "Malaysia":  ["malaysia", "kuala lumpur", "kl", "penang", "selangor"],
+  "Australia": ["australia", "melbourne", "sydney", "brisbane"],
+  "Singapore": ["singapore", "sg"],
+  "Canada":    ["canada", "toronto", "vancouver", "montreal"],
+  "Brunei":    ["brunei", "brunei darussalam", "bandar seri begawan"]
+}
+```
+
+Keys must exactly match `PROFILES` keys in `config.py`. Keys starting with `_` are ignored.
+
+---
+
+## keywords.json format
+
+```json
+{
+  "Finance":   ["finance", "financial", "fp&a", "treasury", "budget"],
+  "Marketing": ["marketing", "brand", "campaign", "content"]
+}
+```
+
+Keys must match template subfolder names (case-insensitive). Keys starting with `_` are ignored.
+
+---
+
+## Cover letter blank rules
+
+- `_` = company/role-specific content only (what the company does, why applicant is drawn to it)
+- Fixed sentences (experience, background, tools) are NEVER modified
+- Only the sentence(s) containing `_` are sent to Claude — rest of paragraph untouched
+- No em dashes (--) or en dashes (-) in output
+
+---
+
+## Template folder structure
+
+```
+TEMPLATE_BASE/
+├── Finance/
+│   ├── Resume.docx
+│   ├── Resume.pdf
+│   ├── Resume.txt       <- plain text resume fed to scraper for context
+│   └── Cover Letter.docx
+└── Marketing/
+    └── ...
+```
+
+Subfolder names must match keys in `keywords.json`.
+
+---
+
+## Tech stack
+
+| Library | Purpose |
+|---------|---------|
+| `playwright` (sync) | Headless Edge scraping |
+| `anthropic` | Claude Haiku -- job extraction + cover letter filling |
+| `python-docx` | Read/write `.docx` templates |
+| `docx2pdf` | `.docx` -> PDF via Microsoft Word (Windows only) |
+| `pypdf` | Merge cover letter bundle PDFs |
+| `python-dotenv` | Load `ANTHROPIC_API_KEY` from `.env` |
+| `questionary` | Arrow-key country selector in terminal |
+| `pywin32` | Windows COM interface for Word/PDF conversion |
