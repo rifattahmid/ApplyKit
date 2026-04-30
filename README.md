@@ -26,11 +26,11 @@ playwright install msedge
 
 ### 2. Set your API key
 
-Create a `.env` file in the project root:
+```bash
+cp .env.example .env
+```
 
-```
-ANTHROPIC_API_KEY=your_key_here
-```
+Edit `.env` and paste your Anthropic API key.
 
 ### 3. Configure paths
 
