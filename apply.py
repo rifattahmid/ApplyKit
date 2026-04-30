@@ -28,37 +28,36 @@ def _detect_profile(country: str | None, locations: dict) -> str | None:
     return None
 
 
-def _select_profile(detected: str | None) -> str:
+def _select_profile() -> str:
     profiles = list(config.PROFILES.keys())
-    default = detected or getattr(config, "DEFAULT_PROFILE", profiles[0])
-    if default not in profiles:
-        default = profiles[0]
-
-    label = f"  Detected: {detected}" if detected else "  Location not detected"
-    print(label)
-
+    default = profiles[0]
+    print("  Location not detected")
     choice = questionary.select(
         "Select country:",
         choices=profiles,
         default=default,
     ).ask()
-
     return choice or default
 
 
 url = input("Paste job URL: ").strip()
 
 data = scrape_job(url)
+print()
 
 # Profile selection
 if hasattr(config, "PROFILES") and config.PROFILES:
     locations = _load_locations()
     detected_profile = _detect_profile(data.get("country"), locations)
-    profile_name = _select_profile(detected_profile)
+    if detected_profile:
+        profile_name = detected_profile
+        print(f"  Country:  {profile_name}")
+    else:
+        profile_name = _select_profile()
     profile = config.PROFILES[profile_name]
     config.OUTPUT_BASE   = profile["OUTPUT_BASE"]
     config.TEMPLATE_BASE = profile["TEMPLATE_BASE"]
-    print(f"  Country:  {profile_name}\n")
+    print()
 
 # Company confirmation
 detected_company = data.get("company", "UNKNOWN")

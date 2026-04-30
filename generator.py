@@ -9,7 +9,11 @@ from docx2pdf import convert
 from pypdf import PdfWriter
 from dotenv import load_dotenv
 
-from config import OUTPUT_BASE, TEMPLATE_BASE, BUNDLE_APPENDIX
+from config import OUTPUT_BASE, TEMPLATE_BASE
+try:
+    from config import BUNDLE_APPENDIX
+except ImportError:
+    BUNDLE_APPENDIX = []
 
 load_dotenv()
 
@@ -351,7 +355,8 @@ def generate_application(data):
     try:
         convert(cover_dest, pdf_dest)
         print(f"  Cover letter PDF: {pdf_dest}")
-        _merge_cover_letter_bundle(pdf_dest, output_folder)
+        if BUNDLE_APPENDIX:
+            _merge_cover_letter_bundle(pdf_dest, output_folder)
     except Exception as e:
         print(f"  WARNING: PDF conversion failed ({e})")
         print("  Make sure Microsoft Word is installed and the .docx is not open.")

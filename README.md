@@ -1,15 +1,26 @@
 # Auto Resume & Cover Letter Generator
 
-Automatically generates a tailored cover letter and selects the right resume template for any job application — given just a URL.
+Paste a job URL. Get a tailored resume and cover letter in seconds.
 
-**What it does:**
+---
+
+## Why this is different from AI-generated cover letters
+
+Most AI cover letter tools generate the entire letter from scratch — resulting in generic, interchangeable output that reads like it was written by an AI.
+
+This tool works differently. **You write the cover letter once, optimised to your voice, experience, and strengths.** The AI only fills in the small parts that need to change per application — the company name, what draws you to the role, why this specific organisation. Everything else stays exactly as you wrote it.
+
+The result is a letter that sounds like you, not like ChatGPT, because it mostly is you.
+
+---
+
+## What it does
+
 1. Scrapes the job posting (title, company, country, responsibilities, qualifications)
-2. Auto-detects the job country and pre-selects the matching profile
-3. Presents an arrow-key menu to confirm or change the country
-4. Classifies the role against your template categories using a keyword scorer
-5. Copies the matching resume template
-6. Fills in the `_` blanks in your cover letter template using Claude AI, with company- and role-specific language
-7. Converts everything to PDF and opens the output folder
+2. Auto-detects the job country and selects the right resume/cover letter template
+3. Classifies the role by category (Finance, Marketing, etc.) and picks the matching template
+4. Fills only the `_` blanks in your cover letter with company- and role-specific language
+5. Converts to PDF and opens the output folder
 
 ---
 
@@ -38,7 +49,13 @@ Edit `.env` and paste your Anthropic API key.
 cp config.example.py config.py
 ```
 
-Edit `config.py` with your template and output folder paths. For multiple countries, define `PROFILES` (see below).
+Edit `config.py` and set all paths:
+
+- `OUTPUT_BASE` — folder where generated applications are saved
+- `TEMPLATE_BASE` — folder containing your resume/cover letter template subfolders
+- `SUPPLEMENTARY_FILES` — any extra PDFs to upload alongside your resume (transcripts, references, etc.)
+- `BUNDLE_APPENDIX` — PDFs to append after the cover letter into a combined bundle PDF (leave empty `[]` if not needed)
+- `PROFILES` — if applying to multiple countries, define one profile per country with its own `OUTPUT_BASE` and `TEMPLATE_BASE`
 
 ### 4. Add your candidate profile
 
@@ -84,9 +101,9 @@ Templates/
 
 Subfolder names must match the keys in `keywords.json`.
 
-### Cover letter blanks
+### Writing your cover letter template
 
-Use `_` as a placeholder in your `Cover Letter.docx` for content that should be tailored per company and role. Only the sentence(s) containing `_` are sent to Claude — everything else is left exactly as written.
+Write your cover letter in full — your background, experience, skills, and voice. Use `_` as a placeholder only where company- or role-specific content belongs. Only those sentences are sent to the AI. Everything else is untouched.
 
 **Template:**
 > I am writing to express my keen interest in the Financial Analyst role at `_`.
@@ -98,6 +115,8 @@ Use `_` as a placeholder in your `Cover Letter.docx` for content that should be 
 
 > What draws me to RHB is its position as one of Southeast Asia's leading financial services groups, where rigorous analysis directly informs strategic decisions.
 
+The AI fills the blank and nothing else. Your sentences stay your sentences.
+
 ---
 
 ## Usage
@@ -106,24 +125,18 @@ Use `_` as a placeholder in your `Cover Letter.docx` for content that should be 
 python apply.py
 ```
 
-Paste the job URL when prompted. The tool will:
-- Auto-detect the job country and pre-select it in the menu
-- Show an arrow-key country selector to confirm or change (if `PROFILES` is configured)
-- Ask you to confirm or correct the detected company name
-- Generate and open your output folder
+Paste the job URL when prompted. The tool auto-detects the country, confirms the company name, and generates your application.
 
 ---
 
 ## Single vs multi-country setup
 
-**Single country** — set `OUTPUT_BASE` and `TEMPLATE_BASE` directly in `config.py`. No profile menu appears.
+**Single country** — set `OUTPUT_BASE` and `TEMPLATE_BASE` directly in `config.py`. No country prompt appears.
 
-**Multiple countries** — define `PROFILES` in `config.py` and populate `locations.json`. The menu appears on every run with the detected country pre-selected.
+**Multiple countries** — define `PROFILES` in `config.py` and populate `locations.json`. Country is auto-detected from the job posting; the prompt only appears if detection fails.
 
 ```python
 # config.py
-DEFAULT_PROFILE = "United States"
-
 PROFILES = {
     "United States": {
         "OUTPUT_BASE":   r"C:\...\Applications\US",
@@ -148,13 +161,13 @@ PROFILES = {
 
 ## Personalisation summary
 
-| File | What to edit |
-|------|-------------|
-| `config.py` | Template/output paths, multi-country profiles |
+| File | What to configure |
+|------|------------------|
+| `config.py` | All folder paths, country profiles, bundle files |
 | `applicant.json` | Personal info, work history, education, skills |
 | `keywords.json` | Job categories and their matching keywords |
 | `locations.json` | Country/city strings mapped to each profile |
-| `Cover Letter.docx` | Your template — use `_` where AI should fill in company/role details |
+| `Cover Letter.docx` | Your template — write it fully, use `_` only for company/role-specific sentences |
 
 ---
 
