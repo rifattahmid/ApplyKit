@@ -121,11 +121,15 @@ The AI fills the blank and nothing else. Your sentences stay your sentences.
 
 ## Usage
 
+Run from a terminal (Command Prompt, PowerShell, or bash — not by double-clicking the file):
+
 ```bash
 python apply.py
 ```
 
 Paste the job URL when prompted. The tool auto-detects the country, confirms the company name, and generates your application.
+
+> The browser runs headless (no window appears) during scraping.
 
 ---
 
