@@ -41,7 +41,7 @@ playwright install msedge
 cp .env.example .env
 ```
 
-Edit `.env` and paste your Anthropic API key.
+Edit `.env` and paste your LLM API key.
 
 ### 3. Configure paths
 
@@ -180,4 +180,4 @@ PROFILES = {
 - Python 3.9+
 - Windows (for `docx2pdf` via Microsoft Word)
 - Microsoft Edge (used by Playwright for scraping)
-- Anthropic API key ([get one here](https://console.anthropic.com))
+- LLM API key (default: Anthropic Claude — [get one here](https://console.anthropic.com))
