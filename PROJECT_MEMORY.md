@@ -1,4 +1,4 @@
-# Project Memory — Auto Resume & Cover Letter Tailor 🪡
+# Project Memory — ApplyKit
 
 Use this file to onboard a new AI assistant instance for debugging or feature work.
 Paste it at the start of your chat, then describe the issue or task.
@@ -191,5 +191,5 @@ Subfolder names must match keys in `keywords.json`.
 ## GitHub
 
 ```
-https://github.com/rifattahmid/Auto-Resume-and-Cover-Letter-Tailor
+https://github.com/rifattahmid/ApplyKit
 ```

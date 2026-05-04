@@ -1,6 +1,6 @@
-# Auto Resume & Cover Letter Tailor 🪡
+# ApplyKit
 
-Paste a job URL. Get a tailored resume and cover letter in seconds.
+Paste a job URL. Get a tailored cover letter and packaged application documents in seconds.
 
 ---
 
