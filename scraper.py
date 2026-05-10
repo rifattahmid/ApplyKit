@@ -139,8 +139,8 @@ def _extract_with_claude(raw_text, url=""):
         messages=[{"role": "user", "content": f"""Extract structured job posting data from the text below.
 
 Return ONLY valid JSON with these keys:
-- "title": the job title
-- "company": the hiring company name (return "UNKNOWN" if you cannot determine it with confidence, e.g. staffing agency or aggregator page)
+- "title": a clean, professional job title suitable for use in a cover letter. Start from the posted title but use the full description to resolve ambiguity — expand abbreviations (e.g. "Snr" → "Senior"), pick the most fitting option when multiple levels or slash-separated titles are listed, and infer the actual role when the posted title is generic (e.g. "Team Member – Corporate Finance" → "Corporate Finance Associate"). Do not invent seniority not supported by the description.
+- "company": the commonly used short name for the hiring company, as a professional would write it in a cover letter. Strip legal suffixes (Berhad, Sdn Bhd, Pty Ltd, Ltd, Inc, Corp, Group, Holdings, etc.) unless they are part of the brand (e.g. "S&P Global" keeps "Global"). Use the well-known abbreviation or brand name when one exists (e.g. "RHB" not "RHB Banking Group", "Maybank" not "Malayan Banking Berhad"). Return "UNKNOWN" if you cannot determine the company with confidence (e.g. staffing agency or aggregator page).
 - "country": the country where the job is based (e.g. "Australia", "Malaysia", "United Kingdom") — return null if not determinable
 - "intro": the introductory paragraph(s) before responsibilities/qualifications
 - "responsibilities": the responsibilities section text

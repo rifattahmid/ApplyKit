@@ -17,6 +17,23 @@ def _load_locations() -> dict:
     return {k: v for k, v in data.items() if not k.startswith("_")}
 
 
+def _sync_new_countries(locations: dict):
+    """Warn and print config.py snippet for any country in locations.json with no profile."""
+    known = set(config.PROFILES.keys())
+    new_countries = [c for c in locations if c not in known]
+    if not new_countries:
+        return
+    for country in new_countries:
+        print(f"\n  WARNING: '{country}' is in locations.json but has no profile in config.py.")
+        print(f"  Add this block to the PROFILES dict in config.py:\n")
+        print(f'    "{country}": {{')
+        print(f'        "OUTPUT_BASE":   r"C:\\Path\\To\\Applications\\{country}",')
+        print(f'        "TEMPLATE_BASE": r"C:\\Path\\To\\Templates\\{country}",')
+        print(f'    }},')
+    print()
+    raise SystemExit(1)
+
+
 def _detect_profile(country: str | None, locations: dict) -> str | None:
     if not country:
         return None
@@ -48,6 +65,7 @@ print()
 # Profile selection
 if hasattr(config, "PROFILES") and config.PROFILES:
     locations = _load_locations()
+    _sync_new_countries(locations)
     detected_profile = _detect_profile(data.get("country"), locations)
     if detected_profile:
         profile_name = detected_profile
@@ -59,9 +77,31 @@ if hasattr(config, "PROFILES") and config.PROFILES:
     config.TEMPLATE_BASE = profile["TEMPLATE_BASE"]
     print()
 
-# Company confirmation
-detected_company = data.get("company", "UNKNOWN")
-company_input = input(f"Company name [{detected_company}]: ").strip()
-data["company"] = company_input if company_input else detected_company
+# Title + company review
+print(f"  Title:    {data.get('title', '')}")
+print(f"  Company:  {data.get('company', 'UNKNOWN')}")
+print()
+
+proceed = questionary.select(
+    "Proceed with these?",
+    choices=["Yes", "No — edit title", "No — edit company", "No — edit both"],
+).ask()
+
+if proceed and proceed.startswith("No"):
+    edit_both = "both" in proceed
+    edit_title = "title" in proceed or edit_both
+    edit_company = "company" in proceed or edit_both
+
+    if edit_title:
+        new_title = input(f"  Title [{data['title']}]: ").strip()
+        if new_title:
+            data["title"] = new_title
+
+    if edit_company:
+        new_company = input(f"  Company [{data.get('company', 'UNKNOWN')}]: ").strip()
+        if new_company:
+            data["company"] = new_company
+
+    print()
 
 generate_application(data)

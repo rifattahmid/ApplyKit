@@ -9,7 +9,7 @@ from docx2pdf import convert
 from pypdf import PdfWriter
 from dotenv import load_dotenv
 
-from config import OUTPUT_BASE, TEMPLATE_BASE
+import config
 try:
     from config import BUNDLE_APPENDIX
 except ImportError:
@@ -96,8 +96,8 @@ def classify_job(title, description):
     title_text = title.lower()
     desc_text  = description.lower()
     available  = [
-        f for f in os.listdir(TEMPLATE_BASE)
-        if os.path.isdir(os.path.join(TEMPLATE_BASE, f))
+        f for f in os.listdir(config.TEMPLATE_BASE)
+        if os.path.isdir(os.path.join(config.TEMPLATE_BASE, f))
     ]
 
     keywords = _load_keywords()
@@ -154,7 +154,7 @@ def classify_job(title, description):
 
 
 def get_paths(category):
-    base = os.path.join(TEMPLATE_BASE, category)
+    base = os.path.join(config.TEMPLATE_BASE, category)
     if not os.path.isdir(base):
         raise FileNotFoundError(f"Template folder not found: {base}")
 
@@ -326,7 +326,7 @@ def generate_application(data):
     resume_pdf, cover_docx, resume_txt = get_paths(category)
 
     folder_name = f"{company} - {title}".replace("/", "-")
-    output_folder = os.path.join(OUTPUT_BASE, folder_name)
+    output_folder = os.path.join(config.OUTPUT_BASE, folder_name)
     os.makedirs(output_folder, exist_ok=True)
 
     shutil.copy(resume_pdf, os.path.join(output_folder, os.path.basename(resume_pdf)))
