@@ -144,6 +144,19 @@ def classify_job(title, description):
                         best = available_lower[preferred]
                         break
 
+    # Specialist override: if Finance wins with no title evidence, prefer any
+    # specialist category that scored on the description. Prevents broad Finance
+    # description noise from routing specialist roles (fixed income, trading, M&A, etc.)
+    _finance_folder = next((f for f in available if f.lower() == "finance"), None)
+    if (
+        _finance_folder
+        and best == _finance_folder
+        and title_scores.get(best, 0) == 0
+    ):
+        specialists = [f for f in available if f != _finance_folder and scores.get(f, 0) > 0]
+        if specialists:
+            best = max(specialists, key=lambda f: (title_scores.get(f, 0), scores[f]))
+
     print(f"  Job classified as: {best}\n")
     print("  Scores:")
     for folder in sorted(scores):
