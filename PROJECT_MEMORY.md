@@ -80,7 +80,7 @@ No `DEFAULT_PROFILE` key — first entry in `PROFILES` is always the default.
    - If not detected: print `Location not detected` and show `questionary.select` menu
    - `config.OUTPUT_BASE` and `config.TEMPLATE_BASE` overridden with chosen profile
 5. `classify_job` runs and category is shown to user
-6. User confirms/corrects title, company, and category (arrow-key selector for category)
+6. User confirms/corrects title, company, and category via a 6-choice prompt: Yes / edit title / edit company / edit title and company / edit category / edit all (category uses arrow-key selector)
 7. `generate_application(data, category=category)` called
 
 ---
