@@ -88,7 +88,7 @@ print()
 
 proceed = questionary.select(
     "Proceed with these?",
-    choices=["Yes", "No — edit title", "No — edit company", "No — edit category", "No — edit all"],
+    choices=["Yes", "No — edit title", "No — edit company", "No — edit title and company", "No — edit category", "No — edit all"],
 ).ask()
 
 if proceed and proceed.startswith("No"):
