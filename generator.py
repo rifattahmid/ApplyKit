@@ -152,16 +152,27 @@ def classify_job(title, description):
     #       title match is a false positive caused by the specialist keyword containing
     #       the broad keyword (e.g. "Fund Accounting" also matches "Accounting"), OR
     #   (b) the broad category has no title evidence at all.
+    # Additionally, if the specialist's category name appears literally in the title
+    # (e.g. "Fund Accounting Senior Analyst"), that is treated as a hard override signal
+    # even when the score threshold isn't met — other keywords in the title (e.g.
+    # "Valuations") can inflate unrelated categories enough to suppress the threshold.
     if best.lower() in broad_categories:
         specialists = [
             f for f in available
             if f.lower() not in broad_categories and scores.get(f, 0) > 0
         ]
         if specialists:
-            top_specialist = max(specialists, key=lambda f: (title_scores.get(f, 0), scores[f]))
-            specialist_has_title = title_scores.get(top_specialist, 0) > 0
-            broad_has_title      = title_scores.get(best, 0) > 0
+            top_specialist = max(specialists, key=lambda f: (
+                title_scores.get(f, 0),
+                1 if f.lower() in title_text else 0,
+                scores[f],
+            ))
+            specialist_has_title    = title_scores.get(top_specialist, 0) > 0
+            specialist_name_in_title = top_specialist.lower() in title_text
+            broad_has_title          = title_scores.get(best, 0) > 0
             if scores[top_specialist] >= scores[best] * 0.6 and (specialist_has_title or not broad_has_title):
+                best = top_specialist
+            elif specialist_has_title and specialist_name_in_title:
                 best = top_specialist
 
     print(f"  Job classified as: {best}\n")
