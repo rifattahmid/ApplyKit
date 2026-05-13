@@ -75,6 +75,12 @@ cp keywords.example.json keywords.json
 
 Edit `keywords.json` so each key matches a subfolder name inside your `TEMPLATE_BASE`. Keywords are matched against the job title (3x weight) and description (1x weight) to pick the right template.
 
+Add a `"_broad_categories"` key listing any categories that are general fallbacks (e.g. Finance, Accounting). If a broad category wins with no title evidence but a specialist category has description signal, the specialist wins instead. Any category not listed in `"_broad_categories"` is treated as a specialist.
+
+```json
+"_broad_categories": ["Finance", "Accounting", "Investment"]
+```
+
 ### 6. Set up your location map (multi-country only)
 
 ```bash

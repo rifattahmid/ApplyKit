@@ -22,10 +22,12 @@ _KEYWORDS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "keywo
 def _load_keywords():
     if not os.path.exists(_KEYWORDS_PATH):
         print("  WARNING: keywords.json not found -- all categories will score 0. Copy keywords.example.json to keywords.json to fix this.")
-        return {}
+        return {}, set()
     with open(_KEYWORDS_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
-    return {k.lower(): v for k, v in data.items() if not k.startswith("_")}
+    broad = {c.lower() for c in data.get("_broad_categories", [])}
+    keywords = {k.lower(): v for k, v in data.items() if not k.startswith("_")}
+    return keywords, broad
 
 _MONTHS = (
     r"January|February|March|April|May|June|July|August|September|October|November|December"
@@ -100,7 +102,7 @@ def classify_job(title, description):
         if os.path.isdir(os.path.join(config.TEMPLATE_BASE, f))
     ]
 
-    keywords = _load_keywords()
+    keywords, broad_categories = _load_keywords()
 
     TITLE_MULTIPLIER = 3
 
@@ -144,16 +146,14 @@ def classify_job(title, description):
                         best = available_lower[preferred]
                         break
 
-    # Specialist override: if Finance wins with no title evidence, prefer any
-    # specialist category that scored on the description. Prevents broad Finance
-    # description noise from routing specialist roles (fixed income, trading, M&A, etc.)
-    _finance_folder = next((f for f in available if f.lower() == "finance"), None)
-    if (
-        _finance_folder
-        and best == _finance_folder
-        and title_scores.get(best, 0) == 0
-    ):
-        specialists = [f for f in available if f != _finance_folder and scores.get(f, 0) > 0]
+    # Specialist override: if a broad category wins with no title evidence,
+    # prefer the highest-scoring specialist category that has description signal.
+    # Broad categories are defined in keywords.json under "_broad_categories".
+    if best.lower() in broad_categories and title_scores.get(best, 0) == 0:
+        specialists = [
+            f for f in available
+            if f.lower() not in broad_categories and scores.get(f, 0) > 0
+        ]
         if specialists:
             best = max(specialists, key=lambda f: (title_scores.get(f, 0), scores[f]))
 

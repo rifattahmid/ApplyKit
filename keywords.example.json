@@ -1,5 +1,6 @@
 {
   "_readme": "Copy this file to keywords.json and edit it. Each key must exactly match a subfolder name inside your TEMPLATE_BASE (case-insensitive). Values are keyword lists matched against the job title (3x weight) and description (1x weight).",
+  "_broad_categories": ["Finance", "Accounting", "Investment"],
 
   "Finance": [
     "finance", "financial", "fp&a", "financial planning", "financial analysis",
@@ -9,7 +10,6 @@
     "corporate finance", "business finance", "group finance", "commercial finance",
     "valuation", "financial modelling", "financial reporting", "management reporting",
     "variance analysis", "cost analysis", "cost control", "cost management",
-    "credit", "credit analysis", "credit risk", "credit manager",
     "controller", "financial controller", "group controller",
     "cfo", "chief financial officer", "vice president finance"
   ],
@@ -109,17 +109,6 @@
     "carbon trading", "emissions trading", "carbon credits",
     "energy markets", "wholesale energy", "spot market",
     "scheduling", "dispatch", "nominations"
-  ],
-
-  "Energy FP&A": [
-    "energy fp&a", "energy finance", "energy analyst", "energy financial analyst",
-    "energy planning", "energy economics",
-    "oil and gas", "oil & gas", "upstream", "downstream", "midstream",
-    "lng", "liquefied natural gas",
-    "power", "utilities", "electricity", "renewables", "renewable energy",
-    "solar", "wind", "battery storage",
-    "energy sector", "energy industry",
-    "production finance", "asset finance", "project economics"
   ],
 
   "Economics": [

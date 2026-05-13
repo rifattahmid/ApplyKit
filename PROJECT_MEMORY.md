@@ -138,12 +138,15 @@ Keys must exactly match `PROFILES` keys in `config.py`. Keys starting with `_` a
 
 ```json
 {
-  "Finance":   ["finance", "financial", "fp&a", "treasury", "budget"],
-  "Marketing": ["marketing", "brand", "campaign", "content"]
+  "_broad_categories": ["Finance", "Accounting", "Investment"],
+  "Finance":   ["fp&a", "budget", "forecasting", "finance analyst"],
+  "Fixed Income": ["fixed income", "bonds", "yield"]
 }
 ```
 
-Keys must match template subfolder names (case-insensitive). Keys starting with `_` are ignored.
+Keys must match template subfolder names (case-insensitive). Keys starting with `_` are ignored by the scorer.
+
+**`_broad_categories`** — list categories that are general fallbacks. If a broad category wins with no title evidence but any specialist category has description signal, the specialist wins instead. Any category not listed here is treated as a specialist. This applies across all domains — not finance-specific.
 
 ---
 
