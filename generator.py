@@ -331,11 +331,12 @@ def _merge_cover_letter_bundle(cover_pdf: str, output_folder: str):
     print(f"  Bundle PDF: {bundle_path}")
 
 
-def generate_application(data):
+def generate_application(data, category=None):
     title = clean_job_title(data["title"])
     company = data["company"]
 
-    category = classify_job(title, data["description"])
+    if category is None:
+        category = classify_job(title, data["description"])
     resume_pdf, cover_docx, resume_txt = get_paths(category)
 
     folder_name = f"{company} - {title}".replace("/", "-")

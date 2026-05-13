@@ -135,7 +135,7 @@ Run from a terminal (Command Prompt, PowerShell, or bash — not by double-click
 python apply.py
 ```
 
-Paste the job URL when prompted. The tool auto-detects the country, confirms the company name, and generates your application.
+Paste the job URL when prompted. The tool auto-detects the country, classifies the role, then asks you to confirm the title, company, and category before generating your application.
 
 > The browser runs headless (no window appears) during scraping.
 

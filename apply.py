@@ -3,7 +3,7 @@ import json
 import config
 import questionary
 from scraper import scrape_job
-from generator import generate_application
+from generator import generate_application, classify_job, clean_job_title
 
 _LOCATIONS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "locations.json")
 
@@ -77,20 +77,25 @@ if hasattr(config, "PROFILES") and config.PROFILES:
     config.TEMPLATE_BASE = profile["TEMPLATE_BASE"]
     print()
 
-# Title + company review
+data["title"] = clean_job_title(data["title"])
+category = classify_job(data["title"], data.get("description", ""))
+
+# Final review: title, company, category
 print(f"  Title:    {data.get('title', '')}")
 print(f"  Company:  {data.get('company', 'UNKNOWN')}")
+print(f"  Category: {category}")
 print()
 
 proceed = questionary.select(
     "Proceed with these?",
-    choices=["Yes", "No — edit title", "No — edit company", "No — edit both"],
+    choices=["Yes", "No — edit title", "No — edit company", "No — edit category", "No — edit all"],
 ).ask()
 
 if proceed and proceed.startswith("No"):
-    edit_both = "both" in proceed
-    edit_title = "title" in proceed or edit_both
-    edit_company = "company" in proceed or edit_both
+    edit_all = "all" in proceed
+    edit_title    = "title"    in proceed or edit_all
+    edit_company  = "company"  in proceed or edit_all
+    edit_category = "category" in proceed or edit_all
 
     if edit_title:
         new_title = input(f"  Title [{data['title']}]: ").strip()
@@ -102,6 +107,17 @@ if proceed and proceed.startswith("No"):
         if new_company:
             data["company"] = new_company
 
+    if edit_category:
+        available = sorted([
+            f for f in os.listdir(config.TEMPLATE_BASE)
+            if os.path.isdir(os.path.join(config.TEMPLATE_BASE, f))
+        ])
+        category = questionary.select(
+            "Select category:",
+            choices=available,
+            default=category if category in available else available[0],
+        ).ask() or category
+
     print()
 
-generate_application(data)
+generate_application(data, category=category)

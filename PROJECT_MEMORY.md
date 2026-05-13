@@ -79,8 +79,9 @@ No `DEFAULT_PROFILE` key — first entry in `PROFILES` is always the default.
    - If detected: print `Country: X` and use that profile silently — no menu shown
    - If not detected: print `Location not detected` and show `questionary.select` menu
    - `config.OUTPUT_BASE` and `config.TEMPLATE_BASE` overridden with chosen profile
-5. User confirms/corrects company name
-6. `generate_application(data)` called
+5. `classify_job` runs and category is shown to user
+6. User confirms/corrects title, company, and category (arrow-key selector for category)
+7. `generate_application(data, category=category)` called
 
 ---
 
