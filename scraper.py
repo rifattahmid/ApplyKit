@@ -37,8 +37,20 @@ def _title_from_url(url):
 def scrape_job(url):
     with sync_playwright() as p:
         # headless=True required for page.pdf() to produce a real PDF
-        browser = p.chromium.launch(channel="msedge", headless=True)
-        page = browser.new_page()
+        browser = p.chromium.launch(
+            channel="msedge",
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"],
+        )
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0"
+            ),
+            viewport={"width": 1280, "height": 900},
+        )
+        page = context.new_page()
 
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
@@ -76,6 +88,7 @@ def scrape_job(url):
         except Exception:
             pdf_bytes = None
 
+        context.close()
         browser.close()
 
     structured = _extract_with_claude(raw_text, url=url)
