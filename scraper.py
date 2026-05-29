@@ -75,25 +75,30 @@ def scrape_job(url):
             except Exception:
                 pass
 
-        # Capture text before cookie popup dismissal — dismissal iterates many
-        # selectors (~3s total) which gives bot-detection time to replace the page.
+        # Capture text and PDF immediately — before cookie popup dismissal and
+        # networkidle, both of which give bot-detection time to replace the page.
         raw_text = page.inner_text("body")
-
-        _dismiss_cookie_popup(page)
-
-        # Brief networkidle wait for PDF quality only
-        try:
-            page.wait_for_load_state("networkidle", timeout=5000)
-        except Exception:
-            pass
 
         try:
             pdf_bytes = page.pdf(format="A4", print_background=True)
         except Exception:
             pdf_bytes = None
 
+        _dismiss_cookie_popup(page)
+
         context.close()
         browser.close()
+
+    if _is_blocked(raw_text):
+        import pyperclip
+        print("  Page could not be scraped (bot protection detected).")
+        print("  1. Go to the job posting in your browser")
+        print("  2. Select all text (Ctrl+A) then copy (Ctrl+C)")
+        print("  3. Come back here and press Enter — do NOT paste into this terminal\n")
+        input()
+        raw_text = pyperclip.paste()
+        if not raw_text or not raw_text.strip():
+            raise RuntimeError("Clipboard is empty — copy the job page text first, then run again.")
 
     structured = _extract_with_claude(raw_text, url=url)
 
@@ -114,6 +119,15 @@ def scrape_job(url):
         "url": url,
         "pdf_bytes": pdf_bytes,
     }
+
+
+def _is_blocked(text: str) -> bool:
+    if not text or len(text.strip()) < 200:
+        return True
+    lower = text.lower()
+    signals = ["406 not acceptable", "403 forbidden", "access denied", "challenge attempts",
+               "captcha", "are you a robot", "verify you are human", "err_failed"]
+    return any(s in lower for s in signals)
 
 
 

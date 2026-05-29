@@ -38,14 +38,12 @@ def _sync_new_countries(locations: dict):
 def _detect_profile(country: str | None, locations: dict) -> str | None:
     if not country:
         return None
-    import re
     country_lower = country.lower()
     for profile_name, loc_list in locations.items():
         for loc in loc_list:
             if re.search(r'\b' + re.escape(loc) + r'\b', country_lower):
                 return profile_name
     return None
-
 
 
 def _select_profile() -> str:
@@ -60,67 +58,76 @@ def _select_profile() -> str:
     return choice or default
 
 
-url = input("Paste job URL: ").strip()
+def _run_once():
+    url = input("Paste job URL (or q to quit): ").strip()
+    if url.lower() in ("q", "quit", "exit", ""):
+        return False
 
-data = scrape_job(url)
-print()
-
-# Profile selection
-if hasattr(config, "PROFILES") and config.PROFILES:
-    locations = _load_locations()
-    _sync_new_countries(locations)
-    detected_profile = _detect_profile(data.get("country"), locations)
-    if detected_profile:
-        profile_name = detected_profile
-        print(f"  Country:  {profile_name}")
-    else:
-        profile_name = _select_profile()
-    profile = config.PROFILES[profile_name]
-    config.OUTPUT_BASE   = profile["OUTPUT_BASE"]
-    config.TEMPLATE_BASE = profile["TEMPLATE_BASE"]
+    data = scrape_job(url)
     print()
 
-data["title"] = clean_job_title(data["title"])
-category = classify_job(data["title"], data.get("description", ""))
+    # Profile selection
+    if hasattr(config, "PROFILES") and config.PROFILES:
+        locations = _load_locations()
+        _sync_new_countries(locations)
+        detected_profile = _detect_profile(data.get("country"), locations)
+        if detected_profile:
+            profile_name = detected_profile
+            print(f"  Country:  {profile_name}")
+        else:
+            profile_name = _select_profile()
+        profile = config.PROFILES[profile_name]
+        config.OUTPUT_BASE   = profile["OUTPUT_BASE"]
+        config.TEMPLATE_BASE = profile["TEMPLATE_BASE"]
+        print()
 
-# Final review: title, company, category
-print(f"  Title:    {data.get('title', '')}")
-print(f"  Company:  {data.get('company', 'UNKNOWN')}")
-print(f"  Category: {category}")
-print()
+    data["title"] = clean_job_title(data["title"])
+    category = classify_job(data["title"], data.get("description", ""))
 
-proceed = questionary.select(
-    "Proceed with these?",
-    choices=["Yes", "No — edit title", "No — edit company", "No — edit title and company", "No — edit category", "No — edit all"],
-).ask()
-
-if proceed and proceed.startswith("No"):
-    edit_all = "all" in proceed
-    edit_title    = "title"    in proceed or edit_all
-    edit_company  = "company"  in proceed or edit_all
-    edit_category = "category" in proceed or edit_all
-
-    if edit_title:
-        new_title = input(f"  Title [{data['title']}]: ").strip()
-        if new_title:
-            data["title"] = new_title
-
-    if edit_company:
-        new_company = input(f"  Company [{data.get('company', 'UNKNOWN')}]: ").strip()
-        if new_company:
-            data["company"] = new_company
-
-    if edit_category:
-        available = sorted([
-            f for f in os.listdir(config.TEMPLATE_BASE)
-            if os.path.isdir(os.path.join(config.TEMPLATE_BASE, f))
-        ])
-        category = questionary.select(
-            "Select category:",
-            choices=available,
-            default=category if category in available else available[0],
-        ).ask() or category
-
+    # Final review: title, company, category
+    print(f"  Title:    {data.get('title', '')}")
+    print(f"  Company:  {data.get('company', 'UNKNOWN')}")
+    print(f"  Category: {category}")
     print()
 
-generate_application(data, category=category)
+    proceed = questionary.select(
+        "Proceed with these?",
+        choices=["Yes", "No — edit title", "No — edit company", "No — edit title and company", "No — edit category", "No — edit all"],
+    ).ask()
+
+    if proceed and proceed.startswith("No"):
+        edit_all = "all" in proceed
+        edit_title    = "title"    in proceed or edit_all
+        edit_company  = "company"  in proceed or edit_all
+        edit_category = "category" in proceed or edit_all
+
+        if edit_title:
+            new_title = input(f"  Title [{data['title']}]: ").strip()
+            if new_title:
+                data["title"] = new_title
+
+        if edit_company:
+            new_company = input(f"  Company [{data.get('company', 'UNKNOWN')}]: ").strip()
+            if new_company:
+                data["company"] = new_company
+
+        if edit_category:
+            available = sorted([
+                f for f in os.listdir(config.TEMPLATE_BASE)
+                if os.path.isdir(os.path.join(config.TEMPLATE_BASE, f))
+            ])
+            category = questionary.select(
+                "Select category:",
+                choices=available,
+                default=category if category in available else available[0],
+            ).ask() or category
+
+        print()
+
+    generate_application(data, category=category)
+    print()
+    return True
+
+
+while _run_once():
+    pass
