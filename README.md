@@ -145,9 +145,9 @@ Some job sites (e.g. CBRE) block headless browsers. When this happens the tool d
 
 1. Go to the job posting in your browser
 2. Select all text (`Ctrl+A`) and copy (`Ctrl+C`)
-3. Switch back to the terminal and press Enter
+3. Switch back to the terminal and press Enter — **do not paste into the terminal**
 
-The tool reads your clipboard and continues as normal.
+The tool reads your clipboard silently and continues as normal.
 
 ---
 

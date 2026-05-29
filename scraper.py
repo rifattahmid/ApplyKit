@@ -98,8 +98,9 @@ def scrape_job(url):
     if _is_blocked(raw_text):
         import pyperclip
         print("  WARNING: page is bot-protected and could not be scraped automatically.")
-        print("  1. Copy all text from the job posting page (Ctrl+A, Ctrl+C)")
-        print("  2. Press Enter here to continue\n")
+        print("  1. Go to the job posting in your browser")
+        print("  2. Select all text (Ctrl+A) and copy (Ctrl+C)")
+        print("  3. Come back here and press Enter — do NOT paste into the terminal\n")
         input()
         raw_text = pyperclip.paste()
         if not raw_text or not raw_text.strip():
