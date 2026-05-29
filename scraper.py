@@ -67,11 +67,11 @@ def scrape_job(url):
                 except Exception:
                     continue
         else:
-            # Wait for h1 so JS has rendered page content, but don't linger —
-            # some sites (e.g. CBRE) replace the page with a bot-detection error
-            # a few seconds after load, so we capture text before that can happen.
+            # Wait until body has real content rather than waiting for network events —
+            # network-based waits (networkidle, h1) give bot-detection time to fire a
+            # secondary request that replaces the page with a 406 error (e.g. CBRE/Akamai).
             try:
-                page.wait_for_selector("h1", timeout=5000)
+                page.wait_for_function("document.body.innerText.trim().length > 500", timeout=8000)
             except Exception:
                 pass
 
