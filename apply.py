@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import config
 import questionary
@@ -37,12 +38,14 @@ def _sync_new_countries(locations: dict):
 def _detect_profile(country: str | None, locations: dict) -> str | None:
     if not country:
         return None
+    import re
     country_lower = country.lower()
     for profile_name, loc_list in locations.items():
         for loc in loc_list:
-            if loc in country_lower or country_lower in loc:
+            if re.search(r'\b' + re.escape(loc) + r'\b', country_lower):
                 return profile_name
     return None
+
 
 
 def _select_profile() -> str:
