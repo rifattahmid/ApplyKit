@@ -54,12 +54,6 @@ def scrape_job(url):
 
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
-        # Wait for h1 first, then for the actual job description body
-        try:
-            page.wait_for_selector("h1", timeout=10000)
-        except Exception:
-            pass
-
         # Workday SPAs load content asynchronously — wait for the description panel
         if "myworkdayjobs.com" in url:
             for sel in [
@@ -73,15 +67,25 @@ def scrape_job(url):
                 except Exception:
                     continue
         else:
-            # For other JS-rendered SPAs, wait for network to settle so content loads
+            # Wait for h1 so JS has rendered page content, but don't linger —
+            # some sites (e.g. CBRE) replace the page with a bot-detection error
+            # a few seconds after load, so we capture text before that can happen.
             try:
-                page.wait_for_load_state("networkidle", timeout=10000)
+                page.wait_for_selector("h1", timeout=5000)
             except Exception:
                 pass
 
+        # Capture text before cookie popup dismissal — dismissal iterates many
+        # selectors (~3s total) which gives bot-detection time to replace the page.
+        raw_text = page.inner_text("body")
+
         _dismiss_cookie_popup(page)
 
-        raw_text = page.inner_text("body")
+        # Brief networkidle wait for PDF quality only
+        try:
+            page.wait_for_load_state("networkidle", timeout=5000)
+        except Exception:
+            pass
 
         try:
             pdf_bytes = page.pdf(format="A4", print_background=True)
@@ -90,6 +94,17 @@ def scrape_job(url):
 
         context.close()
         browser.close()
+
+    if _is_blocked(raw_text):
+        print("  WARNING: page appears bot-blocked. Paste the job description below.")
+        print("  (Copy all text from the job posting, then press Enter twice when done)\n")
+        lines = []
+        while True:
+            line = input()
+            if line == "" and lines and lines[-1] == "":
+                break
+            lines.append(line)
+        raw_text = "\n".join(lines)
 
     structured = _extract_with_claude(raw_text, url=url)
 
@@ -110,6 +125,16 @@ def scrape_job(url):
         "url": url,
         "pdf_bytes": pdf_bytes,
     }
+
+
+def _is_blocked(text: str) -> bool:
+    """Return True if the scraped text looks like a bot-block or error page."""
+    if not text or len(text.strip()) < 200:
+        return True
+    lower = text.lower()
+    signals = ["406 not acceptable", "403 forbidden", "access denied", "challenge attempts",
+               "captcha", "are you a robot", "verify you are human", "err_failed"]
+    return any(s in lower for s in signals)
 
 
 def _dismiss_cookie_popup(page):
