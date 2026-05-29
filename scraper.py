@@ -95,17 +95,6 @@ def scrape_job(url):
         context.close()
         browser.close()
 
-    if _is_blocked(raw_text):
-        import pyperclip
-        print("  WARNING: page is bot-protected and could not be scraped automatically.")
-        print("  1. Go to the job posting in your browser")
-        print("  2. Select all text (Ctrl+A) and copy (Ctrl+C)")
-        print("  3. Come back here and press Enter — do NOT paste into the terminal\n")
-        input()
-        raw_text = pyperclip.paste()
-        if not raw_text or not raw_text.strip():
-            raise RuntimeError("Clipboard is empty — copy the job page text first, then run again.")
-
     structured = _extract_with_claude(raw_text, url=url)
 
     company = structured.get("company", "UNKNOWN")
@@ -126,15 +115,6 @@ def scrape_job(url):
         "pdf_bytes": pdf_bytes,
     }
 
-
-def _is_blocked(text: str) -> bool:
-    """Return True if the scraped text looks like a bot-block or error page."""
-    if not text or len(text.strip()) < 200:
-        return True
-    lower = text.lower()
-    signals = ["406 not acceptable", "403 forbidden", "access denied", "challenge attempts",
-               "captcha", "are you a robot", "verify you are human", "err_failed"]
-    return any(s in lower for s in signals)
 
 
 def _dismiss_cookie_popup(page):

@@ -6,4 +6,3 @@ python-dotenv
 playwright
 pywin32
 questionary
-pyperclip

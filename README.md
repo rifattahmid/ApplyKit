@@ -139,15 +139,6 @@ Paste the job URL when prompted. The tool auto-detects the country, classifies t
 
 > The browser runs headless (no window appears) during scraping.
 
-### Bot-protected pages
-
-Some job sites (e.g. CBRE) block headless browsers. When this happens the tool detects it and falls back to clipboard mode:
-
-1. Go to the job posting in your browser
-2. Select all text (`Ctrl+A`) and copy (`Ctrl+C`)
-3. Switch back to the terminal and press Enter — **do not paste into the terminal**
-
-The tool reads your clipboard silently and continues as normal.
 
 ---
 
