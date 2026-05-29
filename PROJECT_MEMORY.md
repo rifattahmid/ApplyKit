@@ -110,12 +110,15 @@ Orchestrates: classify -> copy templates -> fill cover letter -> convert to PDF 
 ## scraper.py — key logic
 
 **`scrape_job(url)`**
-Headless Edge, navigates to URL, dismisses cookie popups, extracts raw text + PDF bytes. Passes text to Claude Haiku to extract structured JSON:
+Headless Edge, navigates to URL, captures raw text (before cookie popup dismissal to avoid bot-detection timing), generates PDF, then passes text to Claude Haiku to extract structured JSON:
 - `title`, `company`, `country` (null if not determinable), `intro`, `responsibilities`, `qualifications`
 
 All fields returned in the data dict. `country` drives profile detection in `apply.py`.
 
 URL-based fallback for company/title extraction: Workday (`*.wd*.myworkdayjobs.com`), Greenhouse (`boards.greenhouse.io`), Lever (`jobs.lever.co`).
+
+**`_is_blocked(text)`**
+Detects bot-block pages (406, 403, captcha, challenge, empty content). If triggered, the tool prompts the user to copy the job page text to their clipboard (`Ctrl+A`, `Ctrl+C`) and press Enter — then reads it via `pyperclip.paste()`.
 
 ---
 
@@ -189,6 +192,7 @@ Subfolder names must match keys in `keywords.json`.
 | `python-dotenv` | Load API key from `.env` |
 | `questionary` | Arrow-key country selector in terminal |
 | `pywin32` | Windows COM interface for Word/PDF conversion |
+| `pyperclip` | Clipboard read for bot-protected job pages |
 
 ---
 

@@ -96,15 +96,14 @@ def scrape_job(url):
         browser.close()
 
     if _is_blocked(raw_text):
-        print("  WARNING: page appears bot-blocked. Paste the job description below.")
-        print("  (Copy all text from the job posting, then press Enter twice when done)\n")
-        lines = []
-        while True:
-            line = input()
-            if line == "" and lines and lines[-1] == "":
-                break
-            lines.append(line)
-        raw_text = "\n".join(lines)
+        import pyperclip
+        print("  WARNING: page is bot-protected and could not be scraped automatically.")
+        print("  1. Copy all text from the job posting page (Ctrl+A, Ctrl+C)")
+        print("  2. Press Enter here to continue\n")
+        input()
+        raw_text = pyperclip.paste()
+        if not raw_text or not raw_text.strip():
+            raise RuntimeError("Clipboard is empty — copy the job page text first, then run again.")
 
     structured = _extract_with_claude(raw_text, url=url)
 
