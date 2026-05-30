@@ -1,8 +1,14 @@
 from playwright.sync_api import sync_playwright
-import anthropic
 import json
 import re
-import time
+
+from constants import (
+    PAGE_GOTO_TIMEOUT,
+    H1_WAIT_TIMEOUT,
+    WORKDAY_SELECTOR_TIMEOUT,
+    NETWORKIDLE_TIMEOUT,
+)
+from llm import call_claude
 
 
 def _company_from_url(url):
@@ -52,11 +58,11 @@ def scrape_job(url):
         )
         page = context.new_page()
 
-        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        page.goto(url, wait_until="domcontentloaded", timeout=PAGE_GOTO_TIMEOUT)
 
         # Wait for h1 first, then for the actual job description body
         try:
-            page.wait_for_selector("h1", timeout=10000)
+            page.wait_for_selector("h1", timeout=H1_WAIT_TIMEOUT)
         except Exception:
             pass
 
@@ -68,14 +74,14 @@ def scrape_job(url):
                 ".job-description",
             ]:
                 try:
-                    page.wait_for_selector(sel, timeout=12000)
+                    page.wait_for_selector(sel, timeout=WORKDAY_SELECTOR_TIMEOUT)
                     break
                 except Exception:
                     continue
         else:
             # For other JS-rendered SPAs, wait for network to settle so content loads
             try:
-                page.wait_for_load_state("networkidle", timeout=10000)
+                page.wait_for_load_state("networkidle", timeout=NETWORKIDLE_TIMEOUT)
             except Exception:
                 pass
 
@@ -214,14 +220,8 @@ def _dismiss_cookie_popup(page):
 
 
 def _extract_with_claude(raw_text, url=""):
-    client = anthropic.Anthropic()
     url_hint = f"\nJob URL (use subdomain/path as hints for company and title if not clear from text): {url}" if url else ""
-    for attempt in range(4):
-        try:
-            message = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=1500,
-                messages=[{"role": "user", "content": f"""Extract structured job posting data from the text below.
+    prompt = f"""Extract structured job posting data from the text below.
 
 Return ONLY valid JSON with these keys:
 - "title": a clean, professional job title suitable for use in a cover letter. Start from the posted title but use the full description to resolve ambiguity — expand abbreviations (e.g. "Snr" → "Senior"), pick the most fitting option when multiple levels or slash-separated titles are listed, and infer the actual role when the posted title is generic (e.g. "Team Member – Corporate Finance" → "Corporate Finance Associate"). Do not invent seniority not supported by the description.
@@ -234,18 +234,9 @@ Return ONLY valid JSON with these keys:
 Job posting text:
 {raw_text[:12000]}
 
-Return only the JSON object, no explanation."""}]
-            )
-            break
-        except anthropic.APIStatusError as e:
-            if e.status_code in (500, 502, 503, 529) and attempt < 3:
-                wait = 10 * (attempt + 1)
-                print(f"  API error {e.status_code} — retrying in {wait}s...")
-                time.sleep(wait)
-            else:
-                raise
+Return only the JSON object, no explanation."""
 
-    raw = message.content[0].text.strip()
+    raw = call_claude(prompt, max_tokens=1500)
 
     # Strip markdown code fences if present
     raw = re.sub(r"^```(?:json)?\s*", "", raw)

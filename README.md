@@ -56,6 +56,7 @@ Edit `config.py` and set all paths:
 - `OUTPUT_BASE` — folder where generated applications are saved
 - `TEMPLATE_BASE` — folder containing your resume/cover letter template subfolders
 - `BUNDLE_APPENDIX` — PDFs to append after the cover letter into a combined bundle PDF (leave empty `[]` if not needed)
+- `BUNDLE_NAME` — filename for the bundle PDF (e.g. `"Cover Letter, Recommendations, Transcripts"`); defaults to `"Cover Letter Bundle"` if not set
 - `PROFILES` — if applying to multiple countries, define one profile per country with its own `OUTPUT_BASE` and `TEMPLATE_BASE`
 
 ### 4. Set up your keyword map

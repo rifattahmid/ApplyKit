@@ -26,6 +26,8 @@ auto-resume-cover-letter-tailor/
 ├── apply.py                # Entry point — scrape, country detect, generate
 ├── scraper.py              # Playwright scraper — extracts job data including country
 ├── generator.py            # Classifier + cover letter filler + PDF conversion
+├── llm.py                  # Shared Claude call helper with retry
+├── constants.py            # Internal tuning constants (classifier weights, timeouts)
 ├── config.py               # USER-SPECIFIC settings (gitignored)
 ├── config.example.py       # Template for config.py
 ├── keywords.json           # USER-SPECIFIC keyword map (gitignored)
@@ -46,6 +48,7 @@ auto-resume-cover-letter-tailor/
 # Single country (simple)
 OUTPUT_BASE               # path where generated folders are saved
 TEMPLATE_BASE             # path to template subfolders
+BUNDLE_NAME               # filename for the bundle PDF (defaults to "Cover Letter Bundle")
 BUNDLE_APPENDIX           # PDFs merged into cover letter bundle PDF — skip merge if []
 
 # Multi-country (optional — enables country detection + selector)

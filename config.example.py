@@ -41,7 +41,11 @@ TEMPLATE_BASE = r"C:\Users\YourName\Documents\Templates"
 # Cover letter bundle (optional)
 # ---------------------------------------------------------------------------
 # PDFs appended after the cover letter to create a combined bundle PDF.
-# Leave empty [] if you do not want a bundle.
+# Leave BUNDLE_APPENDIX empty [] if you do not want a bundle PDF generated.
+# BUNDLE_NAME is the filename of the bundle (defaults to "Cover Letter Bundle"
+# if not set). The .pdf extension is added automatically.
+
+BUNDLE_NAME = "Cover Letter Bundle"
 
 BUNDLE_APPENDIX = [
     # r"C:\Users\YourName\Documents\Recommendations.pdf",

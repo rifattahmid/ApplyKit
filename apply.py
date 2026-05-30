@@ -144,6 +144,7 @@ def _process(url):
     return True
 
 
-while _run_once():
-    pass
+if __name__ == "__main__":
+    while _run_once():
+        pass
 

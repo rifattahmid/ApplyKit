@@ -2,8 +2,6 @@ import os
 import re
 import json
 import shutil
-import time
-import anthropic
 from datetime import datetime
 from docx import Document
 from docx2pdf import convert
@@ -11,10 +9,16 @@ from pypdf import PdfWriter
 from dotenv import load_dotenv
 
 import config
+from constants import TITLE_MULTIPLIER, SPECIALIST_THRESHOLD
+from llm import call_claude
 try:
     from config import BUNDLE_APPENDIX
 except ImportError:
     BUNDLE_APPENDIX = []
+try:
+    from config import BUNDLE_NAME
+except ImportError:
+    BUNDLE_NAME = "Cover Letter Bundle"
 
 load_dotenv()
 
@@ -105,8 +109,6 @@ def classify_job(title, description):
 
     keywords, broad_categories = _load_keywords()
 
-    TITLE_MULTIPLIER = 3
-
     scores       = {folder: 0 for folder in available}
     title_scores = {folder: 0 for folder in available}
 
@@ -171,7 +173,7 @@ def classify_job(title, description):
             specialist_has_title    = title_scores.get(top_specialist, 0) > 0
             specialist_name_in_title = top_specialist.lower() in title_text
             broad_has_title          = title_scores.get(best, 0) > 0
-            if scores[top_specialist] >= scores[best] * 0.6 and (specialist_has_title or not broad_has_title):
+            if scores[top_specialist] >= scores[best] * SPECIALIST_THRESHOLD and (specialist_has_title or not broad_has_title):
                 best = top_specialist
             elif specialist_has_title and specialist_name_in_title:
                 best = top_specialist
@@ -296,13 +298,7 @@ def fill_cover_letter(path, company, title, intro, responsibilities, qualificati
         for j, (_, sentences, si, _) in enumerate(blank_items)
     )
 
-    client = anthropic.Anthropic()
-    for attempt in range(4):
-        try:
-            message = client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=1000,
-                messages=[{"role": "user", "content": f"""Fill in the blank(s) (_) in each numbered sentence below.
+    prompt = f"""Fill in the blank(s) (_) in each numbered sentence below.
 
 Role: {title}
 Company (USE EXACTLY THIS): {company}
@@ -320,18 +316,9 @@ Rules:
 - Use EXACTLY "{title}" for the role -- never modify it
 - Fill _ with company/role-specific content: what the company does, why the applicant is drawn to this role or company
 - NEVER use em dashes (--) or en dashes (-)
-- Return ONLY the numbered sentences, nothing else"""}]
-            )
-            break
-        except anthropic.APIStatusError as e:
-            if e.status_code in (500, 502, 503, 529) and attempt < 3:
-                wait = 10 * (attempt + 1)
-                print(f"  API error {e.status_code} — retrying in {wait}s...")
-                time.sleep(wait)
-            else:
-                raise
+- Return ONLY the numbered sentences, nothing else"""
 
-    response = message.content[0].text.strip()
+    response = call_claude(prompt, max_tokens=1000)
 
     rewrites = {}
     for line in response.splitlines():
@@ -359,7 +346,7 @@ Rules:
 
 def _merge_cover_letter_bundle(cover_pdf: str, output_folder: str):
     """Merge cover letter + BUNDLE_APPENDIX into one PDF in output_folder."""
-    bundle_path = os.path.join(output_folder, "Cover Letter, Recommendations, Transcripts.pdf")
+    bundle_path = os.path.join(output_folder, f"{BUNDLE_NAME}.pdf")
     writer = PdfWriter()
     for path in [cover_pdf] + BUNDLE_APPENDIX:
         if not os.path.exists(path):
