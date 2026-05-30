@@ -1,6 +1,5 @@
 # Personal config — fill in your own values, never commit
 config.py
-applicant.json
 keywords.json
 locations.json
 .env

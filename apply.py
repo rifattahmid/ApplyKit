@@ -59,10 +59,25 @@ def _select_profile() -> str:
 
 
 def _run_once():
-    url = input("Paste job URL (or q to quit): ").strip()
+    try:
+        url = input("Paste job URL (or q to quit): ").strip()
+    except (KeyboardInterrupt, EOFError):
+        print()
+        return False
     if url.lower() in ("q", "quit", "exit", ""):
         return False
 
+    try:
+        return _process(url)
+    except KeyboardInterrupt:
+        print("\n  Cancelled. Ready for next URL.\n")
+        return True
+    except Exception as e:
+        print(f"\n  ERROR: {e}\n  Moving on to next URL.\n")
+        return True
+
+
+def _process(url):
     data = scrape_job(url)
     print()
 
@@ -131,3 +146,4 @@ def _run_once():
 
 while _run_once():
     pass
+

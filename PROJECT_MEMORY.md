@@ -28,8 +28,6 @@ auto-resume-cover-letter-tailor/
 ├── generator.py            # Classifier + cover letter filler + PDF conversion
 ├── config.py               # USER-SPECIFIC settings (gitignored)
 ├── config.example.py       # Template for config.py
-├── applicant.json          # USER-SPECIFIC candidate profile (gitignored)
-├── applicant.example.json  # Example with fictional marketing candidate
 ├── keywords.json           # USER-SPECIFIC keyword map (gitignored)
 ├── keywords.example.json   # Extensive example covering 18+ job categories
 ├── locations.json          # USER-SPECIFIC country/city location map (gitignored)
@@ -48,7 +46,6 @@ auto-resume-cover-letter-tailor/
 # Single country (simple)
 OUTPUT_BASE               # path where generated folders are saved
 TEMPLATE_BASE             # path to template subfolders
-SUPPLEMENTARY_FILES       # extra PDFs uploaded alongside resume
 BUNDLE_APPENDIX           # PDFs merged into cover letter bundle PDF — skip merge if []
 
 # Multi-country (optional — enables country detection + selector)
@@ -70,7 +67,7 @@ No `DEFAULT_PROFILE` key — first entry in `PROFILES` is always the default.
 
 ## apply.py — runtime flow
 
-Runs in a `while _run_once(): pass` loop — after each application is saved, it loops back and prompts for the next URL. Type `q` or press Enter on a blank line to exit.
+Runs in a `while _run_once(): pass` loop — after each application is saved, it loops back and prompts for the next URL. Type `q` or press Enter on a blank line to exit. Any exception in `_process(url)` is caught and printed; the loop continues to the next URL. Ctrl+C exits cleanly.
 
 Each iteration (`_run_once()`):
 1. Prompt for job URL (returns `False` if blank or `q`)
@@ -170,9 +167,7 @@ Keys must match template subfolder names (case-insensitive). Keys starting with 
 ```
 TEMPLATE_BASE/
 ├── Finance/
-│   ├── Resume.docx
 │   ├── Resume.pdf
-│   ├── Resume.txt       <- plain text resume fed to scraper for context
 │   └── Cover Letter.docx
 └── Marketing/
     └── ...

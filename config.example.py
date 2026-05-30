@@ -38,17 +38,6 @@ TEMPLATE_BASE = r"C:\Users\YourName\Documents\Templates"
 # }
 
 # ---------------------------------------------------------------------------
-# Supplementary file uploads (optional)
-# ---------------------------------------------------------------------------
-# Extra PDFs uploaded alongside your resume (e.g. transcripts, references)
-# Leave empty [] if you have none.
-
-SUPPLEMENTARY_FILES = [
-    # r"C:\Users\YourName\Documents\References.pdf",
-    # r"C:\Users\YourName\Documents\Transcript.pdf",
-]
-
-# ---------------------------------------------------------------------------
 # Cover letter bundle (optional)
 # ---------------------------------------------------------------------------
 # PDFs appended after the cover letter to create a combined bundle PDF.

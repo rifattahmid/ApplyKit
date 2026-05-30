@@ -55,19 +55,10 @@ Edit `config.py` and set all paths:
 
 - `OUTPUT_BASE` — folder where generated applications are saved
 - `TEMPLATE_BASE` — folder containing your resume/cover letter template subfolders
-- `SUPPLEMENTARY_FILES` — any extra PDFs to upload alongside your resume (transcripts, references, etc.)
 - `BUNDLE_APPENDIX` — PDFs to append after the cover letter into a combined bundle PDF (leave empty `[]` if not needed)
 - `PROFILES` — if applying to multiple countries, define one profile per country with its own `OUTPUT_BASE` and `TEMPLATE_BASE`
 
-### 4. Add your candidate profile
-
-```bash
-cp applicant.example.json applicant.json
-```
-
-Edit `applicant.json` with your personal info, work history, education, and skills.
-
-### 5. Set up your keyword map
+### 4. Set up your keyword map
 
 ```bash
 cp keywords.example.json keywords.json
@@ -81,7 +72,7 @@ Add a `"_broad_categories"` key listing any categories that are general fallback
 "_broad_categories": ["Finance", "Accounting", "Investment"]
 ```
 
-### 6. Set up your location map (multi-country only)
+### 5. Set up your location map (multi-country only)
 
 ```bash
 cp locations.example.json locations.json
@@ -98,9 +89,7 @@ Your `TEMPLATE_BASE` folder should contain one subfolder per job category:
 ```
 Templates/
 ├── Finance/
-│   ├── Resume.docx
 │   ├── Resume.pdf
-│   ├── Resume.txt          ← plain text version of your resume
 │   └── Cover Letter.docx
 ├── Marketing/
 │   └── ...
@@ -187,7 +176,6 @@ PROFILES = {
 | File | What to configure |
 |------|------------------|
 | `config.py` | All folder paths, country profiles, bundle files |
-| `applicant.json` | Personal info, work history, education, skills |
 | `keywords.json` | Job categories and their matching keywords |
 | `locations.json` | Country/city strings mapped to each profile |
 | `Cover Letter.docx` | Your template — write it fully, use `_` only for company/role-specific sentences |

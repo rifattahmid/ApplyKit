@@ -190,7 +190,7 @@ def get_paths(category):
     if not os.path.isdir(base):
         raise FileNotFoundError(f"Template folder not found: {base}")
 
-    resume_pdf = cover_docx = resume_txt = None
+    resume_pdf = cover_docx = None
     for f in os.listdir(base):
         if f.startswith("~$"):          # skip Word temporary lock files
             continue
@@ -199,25 +199,27 @@ def get_paths(category):
             resume_pdf = os.path.join(base, f)
         elif f_lower.endswith(".docx") and "cover" in f_lower:
             cover_docx = os.path.join(base, f)
-        elif f_lower.endswith(".txt") and "resume" in f_lower:
-            resume_txt = os.path.join(base, f)
 
     missing = [
         name for name, val in [
             ("Resume.pdf", resume_pdf),
             ("Cover Letter.docx", cover_docx),
-            ("Resume.txt", resume_txt),
         ]
         if val is None
     ]
     if missing:
         raise FileNotFoundError(f"Missing in {base}: {', '.join(missing)}")
-    return resume_pdf, cover_docx, resume_txt
+    return resume_pdf, cover_docx
 
 
 
 def _rebold_title(para, title):
-    """After _set_para_text, split run[0] around `title` and make the title portion bold."""
+    """After _set_para_text, rebuild paragraph runs cleanly so the title is bold.
+
+    Strips all existing runs from the XML (instead of leaving empty leftovers) and
+    rebuilds with at most 3 runs: before (regular), title (bold), after (regular).
+    The leftover-empty-run approach was fragile across Word/python-docx versions.
+    """
     if not para.runs:
         return
     text = para.runs[0].text
@@ -226,23 +228,32 @@ def _rebold_title(para, title):
     idx = text.index(title)
     before = text[:idx]
     after = text[idx + len(title):]
+
+    # Capture font properties from first run before nuking everything
     run0 = para.runs[0]
-    # Copy font properties for new runs
     font_name = run0.font.name
     font_size = run0.font.size
-    run0.text = before
-    bold_run = para.add_run(title)
-    bold_run.bold = True
-    bold_run.font.name = font_name
-    bold_run.font.size = font_size
-    if after:
-        after_run = para.add_run(after)
-        after_run.bold = False
-        after_run.font.name = font_name
-        after_run.font.size = font_size
+
+    # Remove all existing runs from the paragraph XML
+    for r in list(para.runs):
+        r._element.getparent().remove(r._element)
+
+    def _add(text, bold):
+        if not text:
+            return
+        r = para.add_run(text)
+        r.bold = bold
+        if font_name:
+            r.font.name = font_name
+        if font_size:
+            r.font.size = font_size
+
+    _add(before, False)
+    _add(title, True)
+    _add(after, False)
 
 
-def fill_cover_letter(path, company, title, intro, responsibilities, qualifications, resume_text=""):
+def fill_cover_letter(path, company, title, intro, responsibilities, qualifications):
     doc = Document(path)
     now = datetime.now()
     today = f"{now.day}{_ordinal(now.day)} {now.strftime('%B %Y')}"
@@ -313,9 +324,9 @@ Rules:
             )
             break
         except anthropic.APIStatusError as e:
-            if e.status_code == 529 and attempt < 3:
+            if e.status_code in (500, 502, 503, 529) and attempt < 3:
                 wait = 10 * (attempt + 1)
-                print(f"  API overloaded — retrying in {wait}s...")
+                print(f"  API error {e.status_code} — retrying in {wait}s...")
                 time.sleep(wait)
             else:
                 raise
@@ -366,9 +377,9 @@ def generate_application(data, category=None):
 
     if category is None:
         category = classify_job(title, data["description"])
-    resume_pdf, cover_docx, resume_txt = get_paths(category)
+    resume_pdf, cover_docx = get_paths(category)
 
-    folder_name = f"{company} - {title}".replace("/", "-")
+    folder_name = re.sub(r'[<>:"/\\|?*]', '-', f"{company} - {title}")
     output_folder = os.path.join(config.OUTPUT_BASE, folder_name)
     os.makedirs(output_folder, exist_ok=True)
 
@@ -383,15 +394,11 @@ def generate_application(data, category=None):
             f.write(data["pdf_bytes"])
         print(f"  Position description PDF: {position_pdf}")
 
-    with open(resume_txt, "r", encoding="utf-8") as f:
-        resume_text = f.read()
-
     fill_cover_letter(
         cover_dest, company, title,
         data.get("intro", ""),
         data.get("responsibilities", ""),
         data.get("qualifications", ""),
-        resume_text=resume_text,
     )
 
     pdf_dest = cover_dest.replace(".docx", ".pdf")

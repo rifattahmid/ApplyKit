@@ -54,6 +54,12 @@ def scrape_job(url):
 
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
+        # Wait for h1 first, then for the actual job description body
+        try:
+            page.wait_for_selector("h1", timeout=10000)
+        except Exception:
+            pass
+
         # Workday SPAs load content asynchronously — wait for the description panel
         if "myworkdayjobs.com" in url:
             for sel in [
@@ -67,29 +73,30 @@ def scrape_job(url):
                 except Exception:
                     continue
         else:
-            # Wait until body has real content rather than waiting for network events —
-            # network-based waits (networkidle, h1) give bot-detection time to fire a
-            # secondary request that replaces the page with a 406 error (e.g. CBRE/Akamai).
+            # For other JS-rendered SPAs, wait for network to settle so content loads
             try:
-                page.wait_for_function("document.body.innerText.trim().length > 500", timeout=8000)
+                page.wait_for_load_state("networkidle", timeout=10000)
             except Exception:
                 pass
 
-        # Capture text and PDF immediately — before cookie popup dismissal and
-        # networkidle, both of which give bot-detection time to replace the page.
+        _dismiss_cookie_popup(page)
+
         raw_text = page.inner_text("body")
+
+        _hide_overlays(page)
 
         try:
             pdf_bytes = page.pdf(format="A4", print_background=True)
         except Exception:
             pdf_bytes = None
 
-        _dismiss_cookie_popup(page)
-
         context.close()
         browser.close()
 
     if _is_blocked(raw_text):
+        # PDF captured above is the bot-block page — discard so it isn't saved
+        # as Position Description.pdf alongside the application.
+        pdf_bytes = None
         import pyperclip
         print("  Page could not be scraped (bot protection detected).")
         print("  1. Go to the job posting in your browser")
@@ -122,13 +129,50 @@ def scrape_job(url):
 
 
 def _is_blocked(text: str) -> bool:
-    if not text or len(text.strip()) < 200:
+    if not text or len(text.strip()) < 50:
         return True
     lower = text.lower()
     signals = ["406 not acceptable", "403 forbidden", "access denied", "challenge attempts",
                "captcha", "are you a robot", "verify you are human", "err_failed"]
     return any(s in lower for s in signals)
 
+
+
+def _hide_overlays(page):
+    """Inject CSS to hide common popup/modal/overlay elements before PDF capture.
+
+    Some sites show generic 'ad blocker detected' or 'technical issue' overlays
+    when scripts behave unexpectedly under Playwright. These overlay the page in
+    the PDF even though they're not part of the job content.
+    """
+    try:
+        page.add_style_tag(content="""
+            [role="dialog"],
+            [role="alertdialog"],
+            .modal,
+            .modal-backdrop,
+            .modal-dialog,
+            .modal-overlay,
+            .modal-container,
+            .popup,
+            .popup-overlay,
+            .popup-container,
+            .overlay,
+            .alert-modal,
+            .alert-dialog,
+            [class*="ModalOverlay"],
+            [class*="ModalDialog"],
+            [class*="modal-open"],
+            [class*="popup-open"],
+            [aria-modal="true"] {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+            }
+            body { overflow: auto !important; }
+        """)
+    except Exception:
+        pass
 
 
 def _dismiss_cookie_popup(page):
@@ -194,9 +238,9 @@ Return only the JSON object, no explanation."""}]
             )
             break
         except anthropic.APIStatusError as e:
-            if e.status_code == 529 and attempt < 3:
+            if e.status_code in (500, 502, 503, 529) and attempt < 3:
                 wait = 10 * (attempt + 1)
-                print(f"  API overloaded — retrying in {wait}s...")
+                print(f"  API error {e.status_code} — retrying in {wait}s...")
                 time.sleep(wait)
             else:
                 raise
