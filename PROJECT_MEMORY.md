@@ -70,7 +70,10 @@ No `DEFAULT_PROFILE` key — first entry in `PROFILES` is always the default.
 
 ## apply.py — runtime flow
 
-1. Prompt for job URL
+Runs in a `while _run_once(): pass` loop — after each application is saved, it loops back and prompts for the next URL. Type `q` or press Enter on a blank line to exit.
+
+Each iteration (`_run_once()`):
+1. Prompt for job URL (returns `False` if blank or `q`)
 2. `scrape_job(url)` → returns `data` dict including `country`
 3. Blank line printed for visual separation
 4. If `PROFILES` defined in config:
@@ -117,6 +120,7 @@ All fields returned in the data dict. `country` drives profile detection in `app
 
 URL-based fallback for company/title extraction: Workday (`*.wd*.myworkdayjobs.com`), Greenhouse (`boards.greenhouse.io`), Lever (`jobs.lever.co`).
 
+If the scraped text is detected as a bot-block page (406, 403, captcha, challenge, <200 chars), `_is_blocked()` triggers a clipboard fallback: user copies the job page text (`Ctrl+A`, `Ctrl+C`) and presses Enter — content is read via `pyperclip.paste()`.
 
 ---
 
@@ -190,6 +194,7 @@ Subfolder names must match keys in `keywords.json`.
 | `python-dotenv` | Load API key from `.env` |
 | `questionary` | Arrow-key country selector in terminal |
 | `pywin32` | Windows COM interface for Word/PDF conversion |
+| `pyperclip` | Clipboard read for bot-protected job pages |
 
 ---
 
