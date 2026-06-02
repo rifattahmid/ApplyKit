@@ -19,7 +19,7 @@ The result is a letter that sounds like you, not like ChatGPT, because it mostly
 1. Scrapes the job posting (title, company, country, responsibilities, qualifications)
 2. Auto-detects the job country and selects the right resume/cover letter template
 3. Classifies the role by category (Finance, Marketing, etc.) and picks the matching template
-4. Fills only the `_` blanks in your cover letter with company- and role-specific language
+4. Fills blanks in your cover letter (`_` and `[DESCRIPTION]`) with company- and role-specific language
 5. Converts to PDF and opens the output folder
 
 ---
@@ -101,19 +101,26 @@ Subfolder names must match the keys in `keywords.json`.
 
 ### Writing your cover letter template
 
-Write your cover letter in full — your background, experience, skills, and voice. Use `_` as a placeholder only where company- or role-specific content belongs. Only those sentences are sent to the AI. Everything else is untouched.
+Write your cover letter in full — your background, experience, skills, and voice. Mark only the parts that need to change per application using one of two blank types:
+
+- **`_`** — for short fills: company name, role title, or a brief phrase
+- **`[DESCRIPTION]`** — for guided fills: write what you want Claude to say inside the brackets; it replaces the whole `[...]` with a natural sentence drawn from the job description
+
+Only sentences containing a blank are sent to the AI. Everything else is untouched.
 
 **Template:**
 > I am writing to express my keen interest in the Financial Analyst role at `_`.
 
-> What draws me to `_` is its reputation for disciplined execution and a culture where data-driven analysis shapes business decisions.
+> I applied because [WHAT DRAWS YOU TO THIS COMPANY — their investment mandate, analytical culture, or market position].
 
 **Generated:**
 > I am writing to express my keen interest in the Financial Analyst role at RHB.
 
-> What draws me to RHB is its position as one of Southeast Asia's leading financial services groups, where rigorous analysis directly informs strategic decisions.
+> I applied because RHB's position as one of Southeast Asia's leading financial services groups means rigorous analysis directly informs strategic decisions at scale.
 
-The AI fills the blank and nothing else. Your sentences stay your sentences.
+The AI fills the blanks and nothing else. Your sentences stay your sentences.
+
+> **Page limit:** After generating, the tool checks the cover letter PDF page count and warns if it exceeds one page.
 
 ---
 
@@ -179,7 +186,7 @@ PROFILES = {
 | `config.py` | All folder paths, country profiles, bundle files |
 | `keywords.json` | Job categories and their matching keywords |
 | `locations.json` | Country/city strings mapped to each profile |
-| `Cover Letter.docx` | Your template — write it fully, use `_` only for company/role-specific sentences |
+| `Cover Letter.docx` | Your template — write it fully, use `_` or `[DESCRIPTION]` for company/role-specific sentences |
 
 ---
 

@@ -48,11 +48,6 @@ DATE_PATTERN = re.compile(
 )
 
 
-def _ordinal(n: int) -> str:
-    if 11 <= (n % 100) <= 13:
-        return "th"
-    return {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-
 # Australian states/territories and common location suffixes to strip from job titles
 _LOCATION_TOKENS = re.compile(
     r"[\s,|\-]+\b("
@@ -258,7 +253,7 @@ def _rebold_title(para, title):
 def fill_cover_letter(path, company, title, intro, responsibilities, qualifications):
     doc = Document(path)
     now = datetime.now()
-    today = f"{now.day}{_ordinal(now.day)} {now.strftime('%B %Y')}"
+    today = f"{now.day} {now.strftime('%B %Y')}"
 
     # Replace dates
     date_replaced = False
@@ -270,10 +265,12 @@ def fill_cover_letter(path, company, title, intro, responsibilities, qualificati
     if not date_replaced:
         print(f"  WARNING: no date found in template (today={today})")
 
-    # Collect paragraphs with _ blanks
+    _has_blank = re.compile(r'_|\[.*?\]')
+
+    # Collect paragraphs with _ or [DESCRIPTION] blanks
     blank_paras = [
-        (i, para, any(r.bold and "_" in r.text for r in para.runs))
-        for i, para in enumerate(_iter_all_paragraphs(doc)) if "_" in para.text
+        (i, para, any(r.bold and _has_blank.search(r.text) for r in para.runs))
+        for i, para in enumerate(_iter_all_paragraphs(doc)) if _has_blank.search(para.text)
     ]
 
     if not blank_paras:
@@ -281,12 +278,12 @@ def fill_cover_letter(path, company, title, intro, responsibilities, qualificati
         print("  Cover letter saved (no blanks found)")
         return
 
-    # Extract only the sentence(s) containing _ from each paragraph
+    # Extract only the sentence(s) containing _ or [DESCRIPTION] from each paragraph
     blank_items = []
     for _, para, had_bold_blank in blank_paras:
         sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', para.text)
         for si, s in enumerate(sentences):
-            if '_' in s:
+            if _has_blank.search(s):
                 blank_items.append((para, sentences, si, had_bold_blank))
 
     print(f"\n  Blanks ({len(blank_items)}):")
@@ -298,7 +295,9 @@ def fill_cover_letter(path, company, title, intro, responsibilities, qualificati
         for j, (_, sentences, si, _) in enumerate(blank_items)
     )
 
-    prompt = f"""Fill in the blank(s) (_) in each numbered sentence below.
+    prompt = f"""Fill in the blank(s) in each numbered sentence below. There are two blank types:
+- _ (underscore): replace with company/role-specific content (e.g. company name, what the company does, why the applicant is drawn to this role)
+- [DESCRIPTION]: replace the entire [DESCRIPTION] bracket (including the brackets) with content matching that description, written as a natural continuation of the sentence
 
 Role: {title}
 Company (USE EXACTLY THIS): {company}
@@ -311,10 +310,12 @@ Sentences to fill:
 {numbered_lines}
 
 Rules:
-- Return each sentence IN FULL with ONLY the _ replaced -- do NOT change, remove, or rephrase any other word
+- Return each sentence IN FULL with ONLY the blank(s) replaced -- do NOT change, remove, or rephrase any other word
 - Use EXACTLY "{company}" for the company name -- never modify it
 - Use EXACTLY "{title}" for the role -- never modify it
-- Fill _ with company/role-specific content: what the company does, why the applicant is drawn to this role or company
+- For [DESCRIPTION] blanks: replace the entire [DESCRIPTION] including brackets -- never include brackets in output
+- Draw on the job description above to write specific, natural-sounding content -- avoid generic filler
+- Keep fills concise -- one clause or short phrase for _, one sentence maximum for [DESCRIPTION] blanks
 - NEVER use em dashes (--) or en dashes (-)
 - Return ONLY the numbered sentences, nothing else"""
 
@@ -392,6 +393,13 @@ def generate_application(data, category=None):
     try:
         convert(cover_dest, pdf_dest)
         print(f"  Cover letter PDF: {pdf_dest}")
+        try:
+            from pypdf import PdfReader
+            pages = len(PdfReader(pdf_dest).pages)
+            if pages > 1:
+                print(f"  WARNING: cover letter is {pages} pages -- consider shortening your template or [DESCRIPTION] fills")
+        except Exception:
+            pass
         if BUNDLE_APPENDIX:
             _merge_cover_letter_bundle(pdf_dest, output_folder)
     except Exception as e:

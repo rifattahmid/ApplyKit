@@ -13,7 +13,7 @@ Given a job posting URL, automatically:
 3. If detected: uses that profile silently. If not: shows an arrow-key country selector
 4. Classifies the role against template subfolders using a keyword scorer (`keywords.json`)
 5. Copies the matching resume template to an output folder
-6. Fills `_` blanks in the cover letter template using Claude Haiku — only the sentence(s) containing `_`, everything else untouched
+6. Fills blanks in the cover letter template using Claude Haiku — supports `_` (short fill) and `[DESCRIPTION]` (guided fill); only sentences containing a blank are sent, everything else untouched
 7. Converts `.docx` to PDF via Microsoft Word and opens the output folder
 8. Optionally merges cover letter with supplementary PDFs into a bundle (skipped if `BUNDLE_APPENDIX` is empty)
 
@@ -97,16 +97,18 @@ Reads `keywords.json` from project root. Returns dict keyed by lowercase folder 
 Scores available template subfolders against keywords. Title matches x3 weight. Tie-break: prefer folders with title evidence first, then by priority order. Prints score table to terminal.
 
 **`fill_cover_letter(path, company, title, intro, responsibilities, qualifications)`**
-- Finds all paragraphs containing `_`
+- Finds all paragraphs containing `_` or `[...]` patterns
 - Splits each paragraph into sentences using `re.split(r'(?<=[.!?])\s+(?=[A-Z])', ...)`
-- Sends ONLY the sentence(s) containing `_` to Claude Haiku
-- Claude fills blank with company/role-specific content — does not touch other words
+- Sends ONLY the sentence(s) containing a blank to Claude Haiku
+- Two blank types: `_` (replace with short company/role-specific content), `[DESCRIPTION]` (replace entire bracket including brackets with a sentence matching the description)
+- Claude is instructed to keep fills concise (one clause for `_`, one sentence max for `[DESCRIPTION]`)
 - Splices filled sentence back into full paragraph
 - Preserves bold formatting on job title
+- Date replaced via regex (format: `2 June 2026` — no ordinal suffix)
 - No em dashes in output (enforced in prompt)
 
 **`generate_application(data)`**
-Orchestrates: classify -> copy templates -> fill cover letter -> convert to PDF -> merge bundle (only if `BUNDLE_APPENDIX` is non-empty) -> open output folder.
+Orchestrates: classify -> copy templates -> fill cover letter -> convert to PDF -> page count check (warns if > 1 page) -> merge bundle (only if `BUNDLE_APPENDIX` is non-empty) -> open output folder.
 
 ---
 
@@ -158,10 +160,17 @@ Keys must match template subfolder names (case-insensitive). Keys starting with 
 
 ## Cover letter blank rules
 
-- `_` = company/role-specific content only (what the company does, why applicant is drawn to it)
+Two blank types supported in templates:
+- `_` — short fill: company name, role title, or a brief phrase
+- `[DESCRIPTION]` — guided fill: write what you want inside the brackets; Claude replaces the entire `[...]` with a natural sentence drawn from the job description
+
+General rules:
 - Fixed sentences (experience, background, tools) are NEVER modified
-- Only the sentence(s) containing `_` are sent to Claude — rest of paragraph untouched
+- Only the sentence(s) containing a blank are sent to Claude — rest of paragraph untouched
+- Fills are kept concise: one clause for `_`, one sentence max for `[DESCRIPTION]`
+- Date format: `2 June 2026` (no ordinal suffix)
 - No em dashes or en dashes in output
+- After PDF conversion, page count is checked; a warning is printed if > 1 page
 
 ---
 
