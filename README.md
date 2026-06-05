@@ -28,14 +28,18 @@ The result is a letter that sounds like you, not like ChatGPT, because it mostly
 
 > **Tip:** The `PROJECT_MEMORY.md` file in this repo is a full technical briefing of how the project works. If you get stuck at any point during setup, paste it into Claude, ChatGPT, or any AI assistant and describe your issue — it has everything the AI needs to help you configure, debug, or extend the tool.
 
-### 1. Install dependencies
+### 1. Create a virtual environment and install dependencies
 
-```bash
+```powershell
+python -m venv venv
+.\venv\Scripts\activate
 pip install -r requirements.txt
 playwright install msedge
 ```
 
 > **Windows only:** `docx2pdf` requires Microsoft Word to be installed for PDF conversion.
+
+> **Tip:** After setup, you can run the tool without activating the venv each time by using `.\apply.ps1` (see Usage below).
 
 ### 2. Set your API key
 
@@ -126,9 +130,15 @@ The AI fills the blanks and nothing else. Your sentences stay your sentences.
 
 ## Usage
 
-Run from a terminal (Command Prompt, PowerShell, or bash — not by double-clicking the file):
+Run from a terminal in the ApplyKit folder:
 
-```bash
+```powershell
+.\apply.ps1
+```
+
+Or, if you have the venv active:
+
+```powershell
 python apply.py
 ```
 

@@ -75,7 +75,24 @@
 
   "UAE": [
     "uae", "united arab emirates",
-    "dubai", "abu dhabi", "sharjah"
+    "dubai", "abu dhabi", "sharjah", "ajman",
+    "ras al khaimah", "fujairah", "umm al quwain"
+  ],
+
+  "Saudi Arabia": [
+    "saudi arabia", "saudi", "ksa",
+    "riyadh", "jeddah", "dammam", "dhahran", "khobar", "al khobar",
+    "mecca", "medina", "tabuk", "abha"
+  ],
+
+  "Qatar": [
+    "qatar",
+    "doha", "lusail", "al wakrah", "al khor"
+  ],
+
+  "Brunei": [
+    "brunei", "brunei darussalam",
+    "bandar seri begawan", "bsb", "kb", "kuala belait"
   ],
 
   "India": [

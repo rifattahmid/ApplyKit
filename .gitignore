@@ -8,3 +8,6 @@ locations.json
 __pycache__/
 *.pyc
 recordings/
+
+# Virtual environment
+venv/

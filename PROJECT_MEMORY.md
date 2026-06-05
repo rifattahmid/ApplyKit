@@ -24,6 +24,7 @@ Given a job posting URL, automatically:
 ```
 auto-resume-cover-letter-tailor/
 ├── apply.py                # Entry point — scrape, country detect, generate
+├── apply.ps1               # PowerShell wrapper — runs apply.py via venv without activation
 ├── scraper.py              # Playwright scraper — extracts job data including country
 ├── generator.py            # Classifier + cover letter filler + PDF conversion
 ├── llm.py                  # Shared Claude call helper with retry
@@ -35,6 +36,7 @@ auto-resume-cover-letter-tailor/
 ├── locations.json          # USER-SPECIFIC country/city location map (gitignored)
 ├── locations.example.json  # Example covering 11 countries
 ├── requirements.txt        # anthropic, python-docx, docx2pdf, pypdf, python-dotenv, playwright, pywin32, questionary
+├── venv/                   # Project virtual environment (gitignored)
 ├── .env                    # LLM API key (gitignored)
 ├── .env.example            # API key template — includes Anthropic, OpenAI, Groq, DeepSeek, etc.
 └── .gitignore
