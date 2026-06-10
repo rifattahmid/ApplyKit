@@ -3,11 +3,21 @@ import re
 import json
 import config
 import questionary
+from classifier import classify_job
 from scraper import scrape_job
-from generator import generate_application, classify_job, clean_job_title
+from generator import generate_application, clean_job_title
+
+
+# =============================================================================
+# Paths
+# =============================================================================
 
 _LOCATIONS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "locations.json")
 
+
+# =============================================================================
+# Location And Profile Selection
+# =============================================================================
 
 def _load_locations() -> dict:
     if not os.path.exists(_LOCATIONS_PATH):
@@ -48,7 +58,8 @@ def _detect_profile(country: str | None, locations: dict) -> str | None:
 
 def _select_profile() -> str:
     profiles = list(config.PROFILES.keys())
-    default = profiles[0]
+    configured_default = getattr(config, "DEFAULT_PROFILE", None)
+    default = configured_default if configured_default in profiles else profiles[0]
     print("  Location not detected")
     choice = questionary.select(
         "Select country:",
@@ -57,6 +68,10 @@ def _select_profile() -> str:
     ).ask()
     return choice or default
 
+
+# =============================================================================
+# CLI Loop
+# =============================================================================
 
 def _run_once():
     try:
@@ -76,6 +91,10 @@ def _run_once():
         print(f"\n  ERROR: {e}\n  Moving on to next URL.\n")
         return True
 
+
+# =============================================================================
+# Application Flow
+# =============================================================================
 
 def _process(url):
     data = scrape_job(url)
@@ -147,4 +166,3 @@ def _process(url):
 if __name__ == "__main__":
     while _run_once():
         pass
-
