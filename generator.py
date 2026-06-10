@@ -1,16 +1,31 @@
 import os
 import re
-import json
+import glob
 import shutil
 from datetime import datetime
 from docx import Document
 from docx2pdf import convert
-from pypdf import PdfWriter
+from pypdf import PdfReader, PdfWriter
 from dotenv import load_dotenv
 
 import config
-from constants import TITLE_MULTIPLIER, SPECIALIST_THRESHOLD
-from llm import call_claude
+from classifier import classify_job as _classify_job
+from classifier import load_keywords as _classifier_load_keywords
+from llm import call_llm
+from resume_context import (
+    build_resume_context_query,
+    get_resume_context_paths as _get_resume_context_paths,
+    load_resume_extended as _load_resume_extended,
+    load_resume_source as _load_resume_source,
+    resume_context_status as _resume_context_status_lines,
+    select_resume_extended_context,
+)
+
+
+# =============================================================================
+# Config Defaults
+# =============================================================================
+
 try:
     from config import BUNDLE_APPENDIX
 except ImportError:
@@ -19,20 +34,175 @@ try:
     from config import BUNDLE_NAME
 except ImportError:
     BUNDLE_NAME = "Cover Letter Bundle"
+try:
+    from config import RESUME_SOURCE
+except ImportError:
+    RESUME_SOURCE = "resume.source.md"
+try:
+    from config import RESUME_SOURCE_FILENAME
+except ImportError:
+    RESUME_SOURCE_FILENAME = "resume.source.md"
+try:
+    from config import RESUME_EXTENDED_SOURCE
+except ImportError:
+    RESUME_EXTENDED_SOURCE = "resume.extended.md"
+try:
+    from config import RESUME_EXTENDED_FILENAME
+except ImportError:
+    RESUME_EXTENDED_FILENAME = "resume.extended.md"
+
+
+# =============================================================================
+# Environment And Project Paths
+# =============================================================================
 
 load_dotenv()
 
-_KEYWORDS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "keywords.json")
+
+# =============================================================================
+# Keyword Loading
+# =============================================================================
 
 def _load_keywords():
-    if not os.path.exists(_KEYWORDS_PATH):
-        print("  WARNING: keywords.json not found -- all categories will score 0. Copy keywords.example.json to keywords.json to fix this.")
-        return {}, set()
-    with open(_KEYWORDS_PATH, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    broad = {c.lower() for c in data.get("_broad_categories", [])}
-    keywords = {k.lower(): v for k, v in data.items() if not k.startswith("_")}
-    return keywords, broad
+    return _classifier_load_keywords()
+
+
+# =============================================================================
+# Config Accessors
+# =============================================================================
+
+def get_resume_page_limit():
+    try:
+        limit = int(getattr(config, "RESUME_PAGE_LIMIT", 1))
+    except (TypeError, ValueError):
+        limit = 1
+    return max(1, limit)
+
+
+def get_cover_letter_page_limit():
+    try:
+        limit = int(getattr(config, "COVER_LETTER_PAGE_LIMIT", 1))
+    except (TypeError, ValueError):
+        limit = 1
+    return max(1, limit)
+
+
+def get_page_fit_max_attempts():
+    try:
+        attempts = int(getattr(config, "PAGE_FIT_MAX_ATTEMPTS", 2))
+    except (TypeError, ValueError):
+        attempts = 2
+    return max(0, attempts)
+
+
+def get_page_fit_max_lines_per_attempt():
+    try:
+        lines = int(getattr(config, "PAGE_FIT_MAX_LINES_PER_ATTEMPT", 4))
+    except (TypeError, ValueError):
+        lines = 4
+    return max(1, lines)
+
+
+def get_page_fit_min_line_retain_ratio():
+    try:
+        ratio = float(getattr(config, "PAGE_FIT_MIN_LINE_RETAIN_RATIO", 0.88))
+    except (TypeError, ValueError):
+        ratio = 0.88
+    return min(1.0, max(0.5, ratio))
+
+
+def get_resume_tailoring_aggression():
+    mode = str(getattr(config, "RESUME_TAILORING_AGGRESSION", "balanced")).strip().lower()
+    if mode not in {"conservative", "balanced", "aggressive"}:
+        return "balanced"
+    return mode
+
+
+def get_cli_verbosity():
+    mode = str(getattr(config, "CLI_VERBOSITY", "normal")).strip().lower()
+    if mode not in {"quiet", "normal", "debug"}:
+        return "normal"
+    return mode
+
+
+def _resume_aggression_guidance(mode):
+    if mode == "conservative":
+        return (
+            "conservative - edit only direct, obvious matches. Prefer SKIP when "
+            "the sentence-to-keyword fit is merely adjacent."
+        )
+    if mode == "aggressive":
+        return (
+            "aggressive - permit stronger adjacent phrasing when the factual "
+            "source or extended source supports it, while still avoiding invented "
+            "ownership, tools, credentials, or outcomes."
+        )
+    return (
+        "balanced - edit direct matches and coherent adjacent matches. Use SKIP "
+        "for weak or forced sentence-to-keyword fits."
+    )
+
+
+# =============================================================================
+# Resume Context Files
+# =============================================================================
+
+def _resolve_optional_project_path(path):
+    from resume_context import resolve_optional_project_path
+    return resolve_optional_project_path(path)
+
+
+def _resolve_resume_markdown_path(category_dir=None, local_filename=None, fallback_path=None):
+    from resume_context import resolve_resume_markdown_path
+    return resolve_resume_markdown_path(category_dir, local_filename, fallback_path)
+
+
+def _load_resume_markdown(category_dir=None, local_filename=None, fallback_path=None):
+    from resume_context import load_resume_markdown
+    return load_resume_markdown(category_dir, local_filename, fallback_path)
+
+
+def get_resume_context_paths(
+    category_dir=None,
+    source_filename=None,
+    extended_filename=None,
+    project_source=None,
+    project_extended=None,
+):
+    return _get_resume_context_paths(
+        category_dir=category_dir,
+        source_filename=source_filename if source_filename is not None else RESUME_SOURCE_FILENAME,
+        extended_filename=extended_filename if extended_filename is not None else RESUME_EXTENDED_FILENAME,
+        project_source=project_source if project_source is not None else RESUME_SOURCE,
+        project_extended=project_extended if project_extended is not None else RESUME_EXTENDED_SOURCE,
+    )
+
+
+def _resume_context_status(context_paths, extended_selection=None):
+    return _resume_context_status_lines(context_paths, extended_selection)
+
+
+def load_resume_source(path=None, category_dir=None, project_source=None, source_filename=None):
+    return _load_resume_source(
+        path=path,
+        category_dir=category_dir,
+        project_source=project_source,
+        source_filename=source_filename if source_filename is not None else RESUME_SOURCE_FILENAME,
+    )
+
+
+def load_resume_extended(path=None, category_dir=None, project_extended=None, extended_filename=None):
+    return _load_resume_extended(
+        path=path,
+        category_dir=category_dir,
+        project_extended=project_extended,
+        extended_filename=extended_filename if extended_filename is not None else RESUME_EXTENDED_FILENAME,
+    )
+
+
+# =============================================================================
+# Text Patterns
+# =============================================================================
 
 _MONTHS = (
     r"January|February|March|April|May|June|July|August|September|October|November|December"
@@ -47,6 +217,9 @@ DATE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+RESUME_MARKER_PATTERN = re.compile(r"^\s*\[(.+)\]\s*$")
+RESUME_CONTROL_LABEL_PATTERN = re.compile(r"^[A-Z_]+(?::|\Z)")
+
 
 # Australian states/territories and common location suffixes to strip from job titles
 _LOCATION_TOKENS = re.compile(
@@ -57,6 +230,10 @@ _LOCATION_TOKENS = re.compile(
     re.IGNORECASE,
 )
 
+
+# =============================================================================
+# DOCX/Text Helpers
+# =============================================================================
 
 def _iter_all_paragraphs(doc):
     """Yield every paragraph in the document, including those inside table cells."""
@@ -87,115 +264,74 @@ def _set_para_text(para, text):
         para.add_run(text)
 
 
+# =============================================================================
+# Job Classification
+# =============================================================================
+
 def classify_job(title, description):
-    """Match job to a template subfolder. Reads available folders dynamically.
+    return _classify_job(
+        title,
+        description,
+        template_base=config.TEMPLATE_BASE,
+        keyword_loader=_load_keywords,
+    )
 
-    Scoring:
-    - Title keyword match  -> +3  (title signals intent; weighted 3x over body text)
-    - Description keyword  -> +1
-    Tie-break order: investment > m&a > finance > accounting > esg > economics > fund accounting.
-    """
-    title_text = title.lower()
-    desc_text  = description.lower()
-    available  = [
-        f for f in os.listdir(config.TEMPLATE_BASE)
-        if os.path.isdir(os.path.join(config.TEMPLATE_BASE, f))
-    ]
 
-    keywords, broad_categories = _load_keywords()
-
-    scores       = {folder: 0 for folder in available}
-    title_scores = {folder: 0 for folder in available}
-
-    for folder in available:
-        for kw in keywords.get(folder.lower(), []):
-            if kw in title_text:
-                scores[folder]       += TITLE_MULTIPLIER
-                title_scores[folder] += TITLE_MULTIPLIER
-            if kw in desc_text:
-                scores[folder] += 1
-
-    best = max(scores, key=lambda f: scores[f]) if scores else available[0]
-
-    # If the winner has no title evidence, defer to the best title-matched category.
-    # Prevents description noise from overriding a clear title signal
-    # (e.g. "Project Accountant" desc mentioning equity/infrastructure shouldn't pick investment).
-    title_override = False
-    if title_scores.get(best, 0) == 0:
-        title_candidates = [f for f in available if title_scores.get(f, 0) > 0]
-        if title_candidates:
-            best = max(title_candidates, key=lambda f: (title_scores[f], scores[f]))
-            title_override = True
-
-    # Tie-break: if two or more categories share the top score, prefer whichever has
-    # title evidence first; among those still tied, prefer investment > finance > accounting.
-    # Skip if title override already resolved the winner -- tie-break must not undo it.
-    if not title_override:
-        top_score = scores[best]
-        if sum(1 for v in scores.values() if v == top_score) > 1:
-            # Prefer tied candidates with title evidence over those without
-            title_tied = [f for f in available if scores.get(f, 0) == top_score and title_scores.get(f, 0) > 0]
-            if title_tied:
-                best = max(title_tied, key=lambda f: (title_scores[f], scores[f]))
-            else:
-                available_lower = {f.lower(): f for f in available}
-                for preferred in ("investment", "m&a", "finance", "accounting", "esg", "economics", "fund accounting"):
-                    if preferred in available_lower and scores.get(available_lower[preferred], -1) == top_score:
-                        best = available_lower[preferred]
-                        break
-
-    # Specialist override: if a broad category wins, prefer a specialist that is
-    # competitive (scores >= 60% of the broad winner). Override fires when:
-    #   (a) the specialist has title evidence — handles cases where the broad category's
-    #       title match is a false positive caused by the specialist keyword containing
-    #       the broad keyword (e.g. "Fund Accounting" also matches "Accounting"), OR
-    #   (b) the broad category has no title evidence at all.
-    # Additionally, if the specialist's category name appears literally in the title
-    # (e.g. "Fund Accounting Senior Analyst"), that is treated as a hard override signal
-    # even when the score threshold isn't met — other keywords in the title (e.g.
-    # "Valuations") can inflate unrelated categories enough to suppress the threshold.
-    if best.lower() in broad_categories:
-        specialists = [
-            f for f in available
-            if f.lower() not in broad_categories and scores.get(f, 0) > 0
-        ]
-        if specialists:
-            top_specialist = max(specialists, key=lambda f: (
-                title_scores.get(f, 0),
-                1 if f.lower() in title_text else 0,
-                scores[f],
-            ))
-            specialist_has_title    = title_scores.get(top_specialist, 0) > 0
-            specialist_name_in_title = top_specialist.lower() in title_text
-            broad_has_title          = title_scores.get(best, 0) > 0
-            if scores[top_specialist] >= scores[best] * SPECIALIST_THRESHOLD and (specialist_has_title or not broad_has_title):
-                best = top_specialist
-            elif specialist_has_title and specialist_name_in_title:
-                best = top_specialist
-
-    print(f"  Job classified as: {best}\n")
-    print("  Scores:")
-    for folder in sorted(scores):
-        marker = " <--" if folder == best else ""
-        print(f"    {folder:<20} {scores[folder]:>2}  (title: {title_scores.get(folder, 0)}){marker}")
-    print()
-    return best
-
+# =============================================================================
+# Template Discovery And Output Names
+# =============================================================================
 
 def get_paths(category):
     base = os.path.join(config.TEMPLATE_BASE, category)
     if not os.path.isdir(base):
         raise FileNotFoundError(f"Template folder not found: {base}")
 
-    resume_pdf = cover_docx = None
+    resume_pdf = _find_configured_template_file(
+        base,
+        "RESUME_ORIGINAL_PDF_GLOB",
+        "resume PDF",
+    )
+    resume_docx = _find_configured_template_file(
+        base,
+        "RESUME_EDITABLE_DOCX_GLOB",
+        "editable resume DOCX",
+    )
+    cover_docx = _find_configured_template_file(
+        base,
+        "COVER_LETTER_DOCX_GLOB",
+        "cover letter DOCX",
+    )
+
+    resume_docx_candidates = []
     for f in os.listdir(base):
         if f.startswith("~$"):          # skip Word temporary lock files
             continue
         f_lower = f.lower()
-        if f_lower.endswith(".pdf") and "resume" in f_lower:
+        if resume_pdf is None and f_lower.endswith(".pdf") and "resume" in f_lower:
             resume_pdf = os.path.join(base, f)
-        elif f_lower.endswith(".docx") and "cover" in f_lower:
+        elif resume_docx is None and f_lower.endswith(".docx") and "resume" in f_lower:
+            resume_docx_candidates.append(os.path.join(base, f))
+        elif cover_docx is None and f_lower.endswith(".docx") and "cover" in f_lower:
             cover_docx = os.path.join(base, f)
+
+    def _resume_docx_rank(path):
+        name = os.path.basename(path).lower()
+        draft_penalty = sum(
+            token in name
+            for token in ("clean", "test", "example", "editable", "copy")
+        )
+        primary_name = (
+            name == "resume.docx"
+            or name.endswith("_resume.docx")
+            or name.endswith(" resume.docx")
+            or name.endswith("-resume.docx")
+        )
+        return (draft_penalty, 0 if primary_name else 1, name)
+
+    resume_docx = resume_docx or (
+        sorted(resume_docx_candidates, key=_resume_docx_rank)[0]
+        if resume_docx_candidates else None
+    )
 
     missing = [
         name for name, val in [
@@ -206,8 +342,237 @@ def get_paths(category):
     ]
     if missing:
         raise FileNotFoundError(f"Missing in {base}: {', '.join(missing)}")
-    return resume_pdf, cover_docx
+    return resume_pdf, resume_docx, cover_docx, base
 
+
+def _find_configured_template_file(base, config_name, label):
+    pattern = getattr(config, config_name, None)
+    if pattern is None:
+        return None
+
+    pattern = str(pattern).strip()
+    if not pattern:
+        return None
+
+    search_pattern = pattern if os.path.isabs(pattern) else os.path.join(base, pattern)
+    matches = sorted(
+        path for path in glob.glob(search_pattern)
+        if os.path.isfile(path) and not os.path.basename(path).startswith("~$")
+    )
+    if not matches:
+        raise FileNotFoundError(
+            f"Missing configured {label} matching {pattern!r} in {base}"
+        )
+    return matches[0]
+
+
+def get_tailored_resume_pdf_path(resume_docx_dest):
+    folder = os.path.dirname(resume_docx_dest)
+    resume_stem = os.path.splitext(os.path.basename(resume_docx_dest))[0]
+    resume_stem_clean = _clean_resume_edit_suffix(resume_stem)
+    name_template = getattr(
+        config,
+        "RESUME_TAILORED_PDF_NAME",
+        "{resume_stem_clean}.pdf",
+    )
+
+    if name_template is None:
+        filename = f"{resume_stem}.pdf"
+    else:
+        name_template = str(name_template).strip() or "{resume_stem_clean}.pdf"
+        filename = name_template.format(
+            resume_stem=resume_stem,
+            resume_stem_clean=resume_stem_clean,
+        )
+        if not filename.lower().endswith(".pdf"):
+            filename = f"{filename}.pdf"
+
+    return os.path.join(folder, os.path.basename(filename))
+
+
+def get_cover_letter_pdf_path(cover_docx_dest):
+    folder = os.path.dirname(cover_docx_dest)
+    cover_stem = os.path.splitext(os.path.basename(cover_docx_dest))[0]
+    cover_stem_clean = _clean_resume_edit_suffix(cover_stem)
+    name_template = getattr(
+        config,
+        "COVER_LETTER_PDF_NAME",
+        "{cover_stem_clean}.pdf",
+    )
+
+    if name_template is None:
+        filename = f"{cover_stem}.pdf"
+    else:
+        name_template = str(name_template).strip() or "{cover_stem_clean}.pdf"
+        filename = name_template.format(
+            cover_stem=cover_stem,
+            cover_stem_clean=cover_stem_clean,
+        )
+        if not filename.lower().endswith(".pdf"):
+            filename = f"{filename}.pdf"
+
+    return os.path.join(folder, os.path.basename(filename))
+
+
+def _clean_resume_edit_suffix(stem):
+    return re.sub(r"([ _-])edit(?:able)?$", "", stem, flags=re.IGNORECASE)
+
+
+# =============================================================================
+# Cover Letter Filling
+# =============================================================================
+
+_COVER_CONTROL_LABEL_PATTERN = re.compile(
+    r"(?:^|[\s.])\[?\s*(?:OPTIONAL|DESCRIPTION)\s*:",
+    flags=re.IGNORECASE,
+)
+
+
+def _has_cover_letter_blank(text):
+    return "_" in text or "[" in text or bool(_COVER_CONTROL_LABEL_PATTERN.search(text))
+
+
+def _is_optional_cover_marker(text):
+    return re.search(r"\[?\s*OPTIONAL\s*:", text, flags=re.IGNORECASE) is not None
+
+
+def _is_cover_letter_delete_rewrite(text):
+    normalized = re.sub(r"[^A-Z]", "", text.upper())
+    return normalized in {"DELETE", "REMOVE", "SKIP"}
+
+
+def _split_cover_letter_sentences(text):
+    """Split cover-letter text without splitting inside bracketed instructions."""
+    sentences = []
+    start = 0
+    depth = 0
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "[":
+            depth += 1
+        elif ch == "]" and depth > 0:
+            depth -= 1
+        elif depth == 0 and ch in ".!?":
+            j = i + 1
+            while j < len(text) and text[j].isspace():
+                j += 1
+            if j < len(text) and (text[j].isupper() or text[j] == "["):
+                sentence = text[start:i + 1].strip()
+                if sentence:
+                    sentences.append(sentence)
+                start = j
+                i = j
+                continue
+        i += 1
+
+    tail = text[start:].strip()
+    if tail:
+        sentences.append(tail)
+    return sentences
+
+
+def _clean_cover_letter_rewrite(text):
+    """Remove leaked square-bracket template instructions from an LLM rewrite."""
+    if not text:
+        return ""
+
+    output = []
+    depth = 0
+    for ch in text:
+        if ch == "[":
+            depth += 1
+            continue
+        if ch == "]" and depth > 0:
+            depth -= 1
+            continue
+        if depth == 0:
+            output.append(ch)
+
+    cleaned = "".join(output)
+    cleaned = re.sub(r"\s*\bOPTIONAL:\s*.*$", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*\bDESCRIPTION:\s*.*$", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    return cleaned
+
+
+def _prepare_cover_letter_rewrite(raw_sentence, original_sentence):
+    raw_sentence = (raw_sentence or "").strip()
+    if _is_cover_letter_delete_rewrite(raw_sentence):
+        return "", True
+
+    if _is_optional_cover_marker(original_sentence):
+        payload = _optional_rewrite_payload(raw_sentence)
+        candidate_source = payload if payload is not None else raw_sentence
+        candidate = _extract_optional_final_sentence(candidate_source)
+        candidate = _clean_cover_letter_rewrite(candidate)
+        if not candidate or _looks_like_unfilled_optional_instruction(candidate):
+            return "", True
+        return _ensure_sentence_punctuation(candidate), False
+
+    return _clean_cover_letter_rewrite(raw_sentence), False
+
+
+def _optional_rewrite_payload(text):
+    cleaned = (text or "").strip()
+    if cleaned.startswith("["):
+        cleaned = cleaned[1:].strip()
+    if not re.match(r"^OPTIONAL\s*:", cleaned, flags=re.IGNORECASE):
+        return None
+
+    cleaned = re.sub(r"^OPTIONAL\s*:\s*", "", cleaned, flags=re.IGNORECASE).strip()
+    if cleaned.endswith("]"):
+        cleaned = cleaned[:-1].strip()
+    return cleaned
+
+
+def _extract_optional_final_sentence(text):
+    cleaned = (text or "").strip()
+
+    quoted = re.findall(r'["“](.+?)["”]', cleaned)
+    for item in quoted:
+        if not _looks_like_unfilled_optional_instruction(item):
+            return item.strip()
+
+    sentence_match = re.search(
+        r"\b(I\s+(?:have|bring|developed|built|used|supported|worked|managed|led|can)\b.+)",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    if sentence_match:
+        cleaned = sentence_match.group(1).strip()
+
+    cleaned = re.split(
+        r"\s+[-–—]\s+else\b|\s+else\s+delete\b",
+        cleaned,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0].strip()
+    return cleaned
+
+
+def _looks_like_unfilled_optional_instruction(text):
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return True
+    return bool(
+        re.search(r"\bOPTIONAL\b|\bIF THE ROLE\b|\bname it\b|\belse delete\b", cleaned, re.IGNORECASE)
+        or re.search(r"\bX\b.*\bY\b", cleaned)
+        or "[" in cleaned
+        or "]" in cleaned
+    )
+
+
+def _ensure_sentence_punctuation(text):
+    cleaned = text.strip()
+    if cleaned and cleaned[-1] not in ".!?":
+        return f"{cleaned}."
+    return cleaned
+
+
+def _join_cover_letter_sentences(sentences):
+    return " ".join(s.strip() for s in sentences if s and s.strip())
 
 
 def _rebold_title(para, title):
@@ -265,12 +630,11 @@ def fill_cover_letter(path, company, title, intro, responsibilities, qualificati
     if not date_replaced:
         print(f"  WARNING: no date found in template (today={today})")
 
-    _has_blank = re.compile(r'_|\[.*?\]')
-
     # Collect paragraphs with _ or [DESCRIPTION] blanks
     blank_paras = [
-        (i, para, any(r.bold and _has_blank.search(r.text) for r in para.runs))
-        for i, para in enumerate(_iter_all_paragraphs(doc)) if _has_blank.search(para.text)
+        (i, para, any(r.bold and _has_cover_letter_blank(r.text) for r in para.runs))
+        for i, para in enumerate(_iter_all_paragraphs(doc))
+        if _has_cover_letter_blank(para.text)
     ]
 
     if not blank_paras:
@@ -281,23 +645,22 @@ def fill_cover_letter(path, company, title, intro, responsibilities, qualificati
     # Extract only the sentence(s) containing _ or [DESCRIPTION] from each paragraph
     blank_items = []
     for _, para, had_bold_blank in blank_paras:
-        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', para.text)
+        sentences = _split_cover_letter_sentences(para.text)
         for si, s in enumerate(sentences):
-            if _has_blank.search(s):
+            if _has_cover_letter_blank(s):
                 blank_items.append((para, sentences, si, had_bold_blank))
 
-    print(f"\n  Blanks ({len(blank_items)}):")
-    for j, (_, sentences, si, _) in enumerate(blank_items):
-        print(f"    {j+1}. {sentences[si]}")
+    print(f"\n  Blanks found: {len(blank_items)}")
 
     numbered_lines = "\n".join(
         f"{j+1}. {sentences[si]}"
         for j, (_, sentences, si, _) in enumerate(blank_items)
     )
 
-    prompt = f"""Fill in the blank(s) in each numbered sentence below. There are two blank types:
+    prompt = f"""Fill in the blank(s) in each numbered sentence below. There are three blank types:
 - _ (underscore): replace with company/role-specific content (e.g. company name, what the company does, why the applicant is drawn to this role)
 - [DESCRIPTION]: replace the entire [DESCRIPTION] bracket (including the brackets) with content matching that description, written as a natural continuation of the sentence
+- [OPTIONAL: ...] or OPTIONAL: ...: if the optional instruction is directly relevant to the role, replace the entire optional instruction with one concise natural sentence. If it is not directly relevant, return DELETE for that numbered item.
 
 Role: {title}
 Company (USE EXACTLY THIS): {company}
@@ -314,12 +677,15 @@ Rules:
 - Use EXACTLY "{company}" for the company name -- never modify it
 - Use EXACTLY "{title}" for the role -- never modify it
 - For [DESCRIPTION] blanks: replace the entire [DESCRIPTION] including brackets -- never include brackets in output
+- For OPTIONAL blanks: if the role mentions one of the optional examples, such as SAP, Oracle, IFRS, consolidations, or similar systems/standards, treat it as relevant and return one concrete final sentence
+- For OPTIONAL blanks: never return the OPTIONAL instruction itself; return either the final sentence or DELETE
+- Never include template labels or placeholders such as OPTIONAL, DESCRIPTION, [X], or [Y] in output
 - Draw on the job description above to write specific, natural-sounding content -- avoid generic filler
 - Keep fills concise -- one clause or short phrase for _, one sentence maximum for [DESCRIPTION] blanks
 - NEVER use em dashes (--) or en dashes (-)
 - Return ONLY the numbered sentences, nothing else"""
 
-    response = call_claude(prompt, max_tokens=1000)
+    response = call_llm(prompt, max_tokens=1000)
 
     rewrites = {}
     for line in response.splitlines():
@@ -329,13 +695,26 @@ Rules:
 
     print(f"\n  Filled:")
     for j, (para, sentences, si, had_bold_blank) in enumerate(blank_items):
-        new_sentence = rewrites.get(j, "")
-        if not new_sentence:
+        raw_sentence = rewrites.get(j, "")
+        if not raw_sentence:
             print(f"    {j+1}. WARNING: no rewrite returned")
+            continue
+        new_sentence, should_delete = _prepare_cover_letter_rewrite(
+            raw_sentence,
+            sentences[si],
+        )
+        if should_delete:
+            print(f"    {j+1}. (deleted optional instruction)")
+            sentences[si] = ""
+            new_text = _join_cover_letter_sentences(sentences)
+            _set_para_text(para, new_text)
+            continue
+        if not new_sentence:
+            print(f"    {j+1}. WARNING: rewrite was empty after cleanup")
             continue
         print(f"    {j+1}. {new_sentence}")
         sentences[si] = new_sentence
-        new_text = ' '.join(sentences)
+        new_text = _join_cover_letter_sentences(sentences)
         _set_para_text(para, new_text)
         if title in new_text and para.runs:
             _rebold_title(para, title)
@@ -344,6 +723,616 @@ Rules:
     doc.save(path)
     print("  Cover letter saved")
 
+
+# =============================================================================
+# Resume Marker Tailoring
+# =============================================================================
+
+def fill_resume_markers(
+    path,
+    data,
+    resume_source=None,
+    category_dir=None,
+    llm_call=call_llm,
+    return_edit_records=False,
+):
+    """Tailor resume sentences wrapped in square brackets in a copied .docx."""
+    doc = Document(path)
+    marked_items = []
+    for para in _iter_all_paragraphs(doc):
+        sentence = _resume_editable_sentence(para.text)
+        if sentence:
+            marked_items.append((para, sentence))
+
+    if not marked_items:
+        return (0, []) if return_edit_records else 0
+
+    numbered_sentences = "\n".join(
+        f"{idx}. {sentence}"
+        for idx, (_, sentence) in enumerate(marked_items, 1)
+    )
+
+    title = data.get("title", "")
+    company = data.get("company", "")
+    aggression = get_resume_tailoring_aggression()
+    source_text = load_resume_source(resume_source, category_dir=category_dir)
+    raw_extended_text = load_resume_extended(category_dir=category_dir)
+    context_query = build_resume_context_query(
+        data,
+        [sentence for _, sentence in marked_items],
+    )
+    extended_selection = select_resume_extended_context(
+        raw_extended_text,
+        context_query,
+        enabled=getattr(config, "RESUME_EXTENDED_SELECTION_ENABLED", True),
+        max_sections=getattr(config, "RESUME_EXTENDED_MAX_SECTIONS", 8),
+        max_chars=getattr(config, "RESUME_EXTENDED_MAX_CHARS", 12000),
+        min_score=getattr(config, "RESUME_EXTENDED_MIN_SCORE", 2),
+    )
+    extended_text = extended_selection.text
+    if category_dir:
+        context_paths = get_resume_context_paths(category_dir=category_dir)
+        for line in _resume_context_status(context_paths, extended_selection):
+            print(line)
+    source_block = (
+        "Resume factual source. These are facts that may be directly claimed:\n"
+        f"{source_text}\n\n"
+        if source_text else ""
+    )
+    extended_block = (
+        "Resume extended source. These are user-approved transferable mappings. "
+        "Use them only as defensible phrasing guidance, not as new facts:\n"
+        f"{extended_text}\n\n"
+        if extended_text else ""
+    )
+    prompt = f"""Minimally tailor the bracketed resume sentences for this specific job.
+
+Role: {title}
+Company: {company}
+Aggression mode: {aggression}
+Aggression guidance: {_resume_aggression_guidance(aggression)}
+
+Job description: {data.get("intro", "")}
+Responsibilities: {data.get("responsibilities", "")}
+Qualifications: {data.get("qualifications", "")}
+
+{source_block}{extended_block}Only use facts from the resume factual source, the current resume sentence, or the job description. Use the extended source only for user-approved transferable phrasing. If a useful keyword is not truthfully supported, do not add it.
+
+Marked bracketed resume sentences:
+{numbered_sentences}
+
+Rules:
+- Step 1: extract target ATS phrases from the job description and group them as high-priority or medium-priority
+- Step 2: match each resume sentence to the strongest coherent keyword family before editing
+- Return each numbered sentence IN FULL with the outer brackets removed
+- Return EDIT or SKIP for each numbered sentence
+- Use "N. EDIT | priority=<high|medium|low> | keyword=<keyword phrase> | sentence=<full revised sentence>" when a supported keyword fits coherently
+- Use "N. SKIP | reason=<short reason>" when no coherent job-keyword fit exists
+- Set priority=high for critical ATS/job matches, medium for useful matches, and low for weak/nice-to-have matches
+- Make one compact role-specific keyword edit to every sentence when a supported job keyword can fit coherently
+- Prefer replacing generic wording with exact job-description terminology over adding extra words
+- Do not add a keyword just because it appears in the job description; it must fit the original sentence's evidence
+- Do not count punctuation, slash replacement, or grammar-only cleanup as tailoring
+- Keep the sentence structure and most original wording; add no more than one short phrase when substitution is not enough
+- Prefer exact job-description finance terms and other domain-specific ATS keywords when they are supported by the factual source, current sentence, or extended source
+- If no supported job-specific keyword can fit truthfully and coherently, return the original sentence without brackets
+- Do not invent skills, employers, credentials, responsibilities, metrics, tools, or outcomes
+- Preserve high-signal technical wording, metrics, tools, company names, acronyms, and senior finance/domain language
+- Do not simplify, de-jargonize, or convert technical finance/domain language into generic plain English
+- Do not use hidden text, keyword stuffing, tables, or formatting tricks
+- Return ONLY numbered EDIT/SKIP lines, nothing else"""
+
+    response = llm_call(prompt, max_tokens=2000)
+
+    rewrites = {}
+    rewrite_keywords = {}
+    rewrite_priorities = {}
+    skip_reasons = {}
+    for line in response.splitlines():
+        parsed = _parse_resume_response_line(line)
+        if not parsed:
+            continue
+        idx, action, keyword, body, priority = parsed
+        if action == "SKIP":
+            skip_reasons[idx] = body or "no coherent job-keyword fit"
+        else:
+            rewrites[idx] = _clean_resume_rewrite(body)
+            rewrite_keywords[idx] = keyword
+            rewrite_priorities[idx] = priority
+
+    changed = 0
+    edits = []
+    edit_records = []
+    skipped = []
+    for idx, (para, sentence) in enumerate(marked_items, 1):
+        if idx in skip_reasons:
+            new_text = sentence
+            skipped.append((idx, skip_reasons[idx]))
+        else:
+            new_text = rewrites.get(idx) or sentence
+            if idx not in rewrites:
+                skipped.append((idx, "no rewrite returned"))
+        if new_text != sentence:
+            edits.append((idx, rewrite_keywords.get(idx, ""), new_text))
+            edit_records.append(
+                {
+                    "marker": idx,
+                    "keyword": rewrite_keywords.get(idx, ""),
+                    "priority": rewrite_priorities.get(idx, "medium"),
+                    "original": sentence,
+                    "edited": new_text,
+                }
+            )
+        _set_para_text(para, new_text)
+        changed += 1
+
+    _print_resume_summary(
+        markers=len(marked_items),
+        aggression=aggression,
+        edits=edits,
+        skipped=skipped,
+        verbosity=get_cli_verbosity(),
+    )
+
+    doc.save(path)
+    print("  Resume saved")
+    if return_edit_records:
+        return changed, edit_records
+    return changed
+
+
+def _parse_resume_response_line(line):
+    cleaned = line.strip()
+    m = re.match(r"^(\d+)\.\s*(.+)$", cleaned)
+    if not m:
+        return None
+
+    idx = int(m.group(1))
+    body = m.group(2).strip()
+
+    pipe = re.match(r"^(EDIT|SKIP)\s*\|\s*(.+)$", body, re.IGNORECASE)
+    if pipe:
+        action = pipe.group(1).upper()
+        fields = _parse_pipe_fields(pipe.group(2))
+        if action == "SKIP":
+            return idx, action, "", fields.get("reason", ""), ""
+        return (
+            idx,
+            action,
+            fields.get("keyword", ""),
+            fields.get("sentence", ""),
+            _normalize_resume_priority(fields.get("priority", "medium")),
+        )
+
+    legacy = re.match(r"^(EDIT|SKIP)\s*:\s*(.+)$", body, re.IGNORECASE)
+    if legacy:
+        action = legacy.group(1).upper()
+        return idx, action, "", legacy.group(2).strip(), "medium"
+
+    return idx, "EDIT", "", body, "medium"
+
+
+def _parse_pipe_fields(text):
+    fields = {}
+    for part in re.split(r"\s+\|\s+", text.strip()):
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        fields[key.strip().lower()] = value.strip()
+    return fields
+
+
+def _normalize_resume_priority(priority):
+    priority = str(priority or "medium").strip().lower()
+    if priority not in {"high", "medium", "low"}:
+        return "medium"
+    return priority
+
+
+def _print_resume_summary(markers, aggression, edits, skipped, verbosity):
+    skipped_count = markers - len(edits)
+    if verbosity == "quiet":
+        print(f"\n  Resume: markers={markers} edited={len(edits)} skipped={skipped_count}")
+        return
+
+    print("\n  Resume")
+    print(f"    Markers: {markers} | Edited: {len(edits)} | Skipped: {skipped_count}")
+    print(f"    Aggression: {aggression}")
+
+    print("\n    Edits:")
+    if edits:
+        for idx, keyword, sentence in edits:
+            label = f"+ {keyword}" if keyword else "edited"
+            print(f"      {idx}. {label}")
+            if verbosity == "debug":
+                print(f"         {sentence}")
+    else:
+        print("      none")
+
+    if verbosity == "debug" and skipped:
+        print("\n    Skipped:")
+        for idx, reason in skipped:
+            print(f"      {idx}. {reason}")
+
+
+def _resume_editable_sentence(text):
+    """Return the sentence inside an editable outer bracket marker."""
+    cleaned = text.strip()
+    match = RESUME_MARKER_PATTERN.match(cleaned)
+    if not match:
+        return None
+    sentence = match.group(1).strip()
+    if RESUME_CONTROL_LABEL_PATTERN.match(sentence):
+        return None
+    if "[" in sentence or "]" in sentence:
+        return None
+    return sentence
+
+
+def _clean_resume_rewrite(text):
+    """Remove accidental outer bracket markers from a model rewrite."""
+    cleaned = text.strip()
+    sentence = _resume_editable_sentence(cleaned)
+    if sentence:
+        cleaned = sentence
+    cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    return cleaned.strip()
+
+
+# =============================================================================
+# Page Fit And PDF Conversion
+# =============================================================================
+
+def fit_docx_to_page_limit(
+    docx_path,
+    pdf_path,
+    label,
+    limit,
+    *,
+    llm_call=call_llm,
+    convert_fn=None,
+    page_count_fn=None,
+    max_attempts=None,
+):
+    """Render a DOCX, shorten if it exceeds the page limit, and retry."""
+    if convert_fn is None:
+        convert_fn = convert_docx_to_pdf
+    if page_count_fn is None:
+        page_count_fn = _pdf_page_count
+    if max_attempts is None:
+        max_attempts = get_page_fit_max_attempts()
+
+    shortened_indices = set()
+    attempts = max_attempts + 1
+    for attempt in range(1, attempts + 1):
+        attempt_pdf = _page_fit_attempt_pdf_path(pdf_path, attempt)
+        convert_fn(docx_path, attempt_pdf)
+        pages = page_count_fn(attempt_pdf)
+
+        if pages <= limit:
+            _replace_pdf(attempt_pdf, pdf_path)
+            print(f"  {label} PDF: {pdf_path}")
+            if attempt > 1:
+                print(f"  Page fit: {label} shortened to {pages} page(s)")
+            return True
+
+        if attempt > max_attempts:
+            _replace_pdf(attempt_pdf, pdf_path)
+            print(f"  {label} PDF: {pdf_path}")
+            print(f"  WARNING: {label} is {pages} pages (limit: {limit}) after {max_attempts} shortening attempt(s)")
+            return False
+
+        print(f"  Page fit: {label} is {pages} pages (limit: {limit}); shortening attempt {attempt}/{max_attempts}")
+        changed, changed_indices = shorten_docx_for_page_limit(
+            docx_path,
+            label,
+            pages,
+            limit,
+            llm_call=llm_call,
+            exclude_indices=shortened_indices,
+            return_changed_indices=True,
+        )
+        if not changed:
+            _replace_pdf(attempt_pdf, pdf_path)
+            print(f"  {label} PDF: {pdf_path}")
+            print(f"  WARNING: {label} is {pages} pages (limit: {limit}); no safe shortening changes were accepted")
+            return False
+        shortened_indices.update(changed_indices)
+        _discard_file(attempt_pdf)
+
+    return False
+
+
+def fit_resume_docx_to_page_limit(
+    docx_path,
+    pdf_path,
+    limit,
+    edit_records,
+    *,
+    convert_fn=None,
+    page_count_fn=None,
+):
+    """Render a tailored resume, reverting lowest-priority edits until it fits."""
+    if convert_fn is None:
+        convert_fn = convert_docx_to_pdf
+    if page_count_fn is None:
+        page_count_fn = _pdf_page_count
+
+    attempt = 1
+    attempt_pdf = _page_fit_attempt_pdf_path(pdf_path, attempt)
+    convert_fn(docx_path, attempt_pdf)
+    pages = page_count_fn(attempt_pdf)
+    if pages <= limit:
+        _replace_pdf(attempt_pdf, pdf_path)
+        print(f"  Resume PDF: {pdf_path}")
+        return True
+
+    print(f"  Page fit: Resume is {pages} pages (limit: {limit}); reverting lowest-priority edits")
+    reverted = []
+    for record in _resume_rollback_order(edit_records):
+        if not _revert_resume_edit(docx_path, record):
+            continue
+        reverted.append(record)
+        keyword = record.get("keyword") or "edited keyword"
+        print(f"    Reverted {record.get('marker')}. {keyword}")
+
+        _discard_file(attempt_pdf)
+        attempt += 1
+        attempt_pdf = _page_fit_attempt_pdf_path(pdf_path, attempt)
+        convert_fn(docx_path, attempt_pdf)
+        pages = page_count_fn(attempt_pdf)
+        if pages <= limit:
+            _replace_pdf(attempt_pdf, pdf_path)
+            print(f"  Resume PDF: {pdf_path}")
+            print(f"  Page fit: Resume fit after reverting {len(reverted)} edit(s)")
+            return True
+
+    _replace_pdf(attempt_pdf, pdf_path)
+    print(f"  Resume PDF: {pdf_path}")
+    print(f"  WARNING: Resume is still {pages} pages (limit: {limit}) after reverting {len(reverted)} edit(s)")
+    return False
+
+
+def _resume_rollback_order(edit_records):
+    priority_rank = {"low": 0, "medium": 1, "high": 2}
+
+    def key(record):
+        priority = _normalize_resume_priority(record.get("priority", "medium"))
+        original = record.get("original", "")
+        edited = record.get("edited", "")
+        added_chars = len(edited) - len(original)
+        return (priority_rank[priority], -added_chars, record.get("marker", 0))
+
+    return sorted(edit_records or [], key=key)
+
+
+def _revert_resume_edit(docx_path, record):
+    edited = record.get("edited", "")
+    original = record.get("original", "")
+    if not edited or not original or edited == original:
+        return False
+
+    doc = Document(docx_path)
+    for para in _iter_all_paragraphs(doc):
+        if para.text.strip() == edited:
+            _set_para_text(para, original)
+            doc.save(docx_path)
+            return True
+    return False
+
+
+def convert_docx_to_pdf(docx_path, pdf_path):
+    try:
+        import win32com.client
+    except ImportError:
+        convert(docx_path, pdf_path)
+        return
+
+    word = win32com.client.DispatchEx("Word.Application")
+    word.Visible = False
+    word.DisplayAlerts = 0
+    try:
+        doc = word.Documents.Open(
+            str(docx_path),
+            ConfirmConversions=False,
+            ReadOnly=True,
+            AddToRecentFiles=False,
+        )
+        try:
+            doc.ExportAsFixedFormat(str(pdf_path), 17)
+        finally:
+            doc.Close(False)
+    finally:
+        word.Quit()
+
+
+def _pdf_page_count(pdf_path):
+    return len(PdfReader(pdf_path).pages)
+
+
+def _page_fit_attempt_pdf_path(pdf_path, attempt):
+    root, ext = os.path.splitext(pdf_path)
+    return f"{root}.pagefit_attempt_{attempt}{ext}"
+
+
+def _replace_pdf(src, dst):
+    if os.path.abspath(src) == os.path.abspath(dst):
+        return
+    _discard_file(dst)
+    os.replace(src, dst)
+
+
+def _discard_file(path):
+    try:
+        if path and os.path.exists(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
+# =============================================================================
+# Cover Letter Page-Fit Shortening Helpers
+# =============================================================================
+
+def shorten_docx_for_page_limit(
+    docx_path,
+    label,
+    pages,
+    limit,
+    *,
+    llm_call=call_llm,
+    exclude_indices=None,
+    return_changed_indices=False,
+):
+    doc = Document(docx_path)
+    min_ratio = get_page_fit_min_line_retain_ratio()
+    items = _shortenable_paragraph_items(
+        doc,
+        exclude_indices=exclude_indices,
+        max_lines=get_page_fit_max_lines_per_attempt(),
+    )
+    if not items:
+        return (0, []) if return_changed_indices else 0
+
+    numbered_lines = "\n".join(
+        f"{idx}. {para.text.strip()}"
+        for idx, para in items
+    )
+    retain_percent = int(min_ratio * 100)
+    prompt = f"""Micro-shorten these {label} lines so the document can fit within {limit} page(s).
+
+Current rendered PDF page count: {pages}
+Target page count: {limit}
+Maximum candidate lines this attempt: {len(items)}
+Each replacement must retain at least {retain_percent}% of the original line length.
+
+Lines:
+{numbered_lines}
+
+Rules:
+- Return slight replacements for the numbered lines only
+- Shorten only enough to save space; do not rewrite the whole line
+- Preserve facts, metrics, tools, company names, credentials, dates, and role titles
+- Remove filler, repeated wording, and weak modifiers before removing useful keywords
+- Keep ATS/job-specific keywords that are already present
+- Do not add new facts or new claims
+- Prefer small wording compression over changing meaning
+- It is acceptable to return the original line when a safe slight shortening is not possible
+- Return ONLY numbered lines, nothing else"""
+
+    response = llm_call(prompt, max_tokens=1200)
+    rewrites = {}
+    for line in response.splitlines():
+        m = re.match(r"^(\d+)\.\s*(.+)$", line.strip())
+        if m:
+            rewrites[int(m.group(1))] = m.group(2).strip()
+
+    changed = 0
+    changed_indices = []
+    rejected = []
+    for idx, para in items:
+        old_text = para.text.strip()
+        new_text = rewrites.get(idx)
+        if new_text and _is_acceptable_shortening(old_text, new_text, min_ratio):
+            _set_para_text(para, new_text)
+            changed += 1
+            changed_indices.append(idx)
+        elif new_text and new_text != old_text:
+            rejected.append((idx, old_text, new_text))
+
+    if not changed and rejected:
+        repair_response = llm_call(
+            _page_fit_repair_prompt(label, limit, rejected, min_ratio),
+            max_tokens=1200,
+        )
+        repair_rewrites = {}
+        for line in repair_response.splitlines():
+            m = re.match(r"^(\d+)\.\s*(.+)$", line.strip())
+            if m:
+                repair_rewrites[int(m.group(1))] = m.group(2).strip()
+
+        for idx, para in items:
+            old_text = para.text.strip()
+            new_text = repair_rewrites.get(idx)
+            if new_text and _is_acceptable_shortening(old_text, new_text, min_ratio):
+                _set_para_text(para, new_text)
+                changed += 1
+                changed_indices.append(idx)
+
+    if changed:
+        doc.save(docx_path)
+    if return_changed_indices:
+        return changed, changed_indices
+    return changed
+
+
+def _shortenable_paragraph_items(doc, exclude_indices=None, max_lines=None):
+    exclude_indices = set(exclude_indices or [])
+    items = []
+    for idx, para in enumerate(_iter_all_paragraphs(doc), 1):
+        text = para.text.strip()
+        if idx not in exclude_indices and _is_shortenable_paragraph(text):
+            items.append((idx, para))
+    items = sorted(items, key=lambda item: len(item[1].text.strip()), reverse=True)
+    if max_lines:
+        items = items[:max_lines]
+    items = sorted(items, key=lambda item: item[0])
+    return items
+
+
+def _is_acceptable_shortening(original, candidate, min_retain_ratio):
+    candidate = candidate.strip()
+    if not candidate or candidate == original:
+        return False
+    if len(candidate) >= len(original):
+        return False
+    return len(candidate) >= int(len(original) * min_retain_ratio)
+
+
+def _page_fit_repair_prompt(label, limit, rejected, min_ratio):
+    lines = []
+    retain_percent = int(min_ratio * 100)
+    for idx, original, rejected_text in rejected:
+        minimum = int(len(original) * min_ratio)
+        maximum = len(original) - 1
+        lines.append(
+            f"{idx}. target={minimum}-{maximum} characters | original={original}"
+        )
+    numbered_lines = "\n".join(lines)
+    return f"""Previous replacements were rejected because they cut too much text.
+
+Rewrite these {label} lines again so the document can fit within {limit} page(s).
+
+Each replacement must be shorter than the original but retain at least {retain_percent}% of the original line length.
+Use the target character range shown for each line.
+
+Lines:
+{numbered_lines}
+
+Rules:
+- Return replacements for the numbered lines only
+- Keep facts, metrics, tools, company names, credentials, dates, role titles, and ATS keywords
+- Make only micro-edits: remove filler, repeated wording, or weak modifiers
+- Do not simplify technical wording into generic language
+- Do not add new facts or claims
+- Return ONLY numbered lines, nothing else"""
+
+
+def _is_shortenable_paragraph(text):
+    if len(text) < 70:
+        return False
+    if text.isupper():
+        return False
+    lowered = text.lower()
+    if "email:" in lowered or "mobile:" in lowered or "linkedin:" in lowered:
+        return False
+    return True
+
+
+# =============================================================================
+# Bundle Generation
+# =============================================================================
 
 def _merge_cover_letter_bundle(cover_pdf: str, output_folder: str):
     """Merge cover letter + BUNDLE_APPENDIX into one PDF in output_folder."""
@@ -359,19 +1348,49 @@ def _merge_cover_letter_bundle(cover_pdf: str, output_folder: str):
     print(f"  Bundle PDF: {bundle_path}")
 
 
+# =============================================================================
+# Application Orchestration
+# =============================================================================
+
 def generate_application(data, category=None):
     title = clean_job_title(data["title"])
     company = data["company"]
+    generation_warnings = []
 
     if category is None:
         category = classify_job(title, data["description"])
-    resume_pdf, cover_docx = get_paths(category)
+    resume_pdf, resume_docx, cover_docx, category_dir = get_paths(category)
 
     folder_name = re.sub(r'[<>:"/\\|?*]', '-', f"{company} - {title}")
     output_folder = os.path.join(config.OUTPUT_BASE, folder_name)
     os.makedirs(output_folder, exist_ok=True)
 
-    shutil.copy(resume_pdf, os.path.join(output_folder, os.path.basename(resume_pdf)))
+    resume_pdf_dest = os.path.join(output_folder, os.path.basename(resume_pdf))
+    shutil.copy(resume_pdf, resume_pdf_dest)
+
+    if resume_docx:
+        resume_docx_dest = os.path.join(output_folder, os.path.basename(resume_docx))
+        shutil.copy(resume_docx, resume_docx_dest)
+        resume_markers, resume_edit_records = fill_resume_markers(
+            resume_docx_dest,
+            data,
+            category_dir=category_dir,
+            return_edit_records=True,
+        )
+        if resume_markers:
+            tailored_resume_pdf = get_tailored_resume_pdf_path(resume_docx_dest)
+            try:
+                fit_resume_docx_to_page_limit(
+                    resume_docx_dest,
+                    tailored_resume_pdf,
+                    get_resume_page_limit(),
+                    resume_edit_records,
+                )
+            except Exception as e:
+                print(f"  WARNING: resume PDF conversion failed ({e})")
+                print("  Make sure Microsoft Word is installed and the .docx is not open.")
+                generation_warnings.append(f"Resume PDF conversion failed: {e}")
+
     cover_dest = os.path.join(output_folder, os.path.basename(cover_docx))
     shutil.copy(cover_docx, cover_dest)
 
@@ -389,23 +1408,27 @@ def generate_application(data, category=None):
         data.get("qualifications", ""),
     )
 
-    pdf_dest = cover_dest.replace(".docx", ".pdf")
+    pdf_dest = get_cover_letter_pdf_path(cover_dest)
     try:
-        convert(cover_dest, pdf_dest)
-        print(f"  Cover letter PDF: {pdf_dest}")
-        try:
-            from pypdf import PdfReader
-            pages = len(PdfReader(pdf_dest).pages)
-            if pages > 1:
-                print(f"  WARNING: cover letter is {pages} pages -- consider shortening your template or [DESCRIPTION] fills")
-        except Exception:
-            pass
+        fit_docx_to_page_limit(
+            cover_dest,
+            pdf_dest,
+            "Cover letter",
+            get_cover_letter_page_limit(),
+        )
         if BUNDLE_APPENDIX:
             _merge_cover_letter_bundle(pdf_dest, output_folder)
     except Exception as e:
         print(f"  WARNING: PDF conversion failed ({e})")
         print("  Make sure Microsoft Word is installed and the .docx is not open.")
+        generation_warnings.append(f"Cover letter PDF conversion failed: {e}")
 
-    print(f"\nDone! Saved to: {output_folder}")
+    if generation_warnings:
+        print(f"\nDone with warnings! Saved to: {output_folder}")
+        print("  Issues:")
+        for warning in generation_warnings:
+            print(f"    - {warning}")
+    else:
+        print(f"\nDone! Saved to: {output_folder}")
     os.startfile(output_folder)
     return output_folder
