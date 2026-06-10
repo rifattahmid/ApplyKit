@@ -8,6 +8,13 @@ locations.json
 __pycache__/
 *.pyc
 recordings/
+tmp/
+.pytest_cache/
+.test-tmp/
+tests/
+
+# Local assistant/tool settings
+.claude/
 
 # Virtual environment
 venv/
