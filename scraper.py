@@ -74,7 +74,7 @@ def scrape_job(url):
         except Exception:
             pass
 
-        # Workday SPAs load content asynchronously — wait for the description panel
+        # Workday SPAs load content asynchronously - wait for the description panel
         if "myworkdayjobs.com" in url:
             for sel in [
                 '[data-automation-id="jobPostingDescription"]',
@@ -108,18 +108,18 @@ def scrape_job(url):
         browser.close()
 
     if _is_blocked(raw_text):
-        # PDF captured above is the bot-block page — discard so it isn't saved
+        # PDF captured above is the bot-block page - discard so it isn't saved
         # as Position Description.pdf alongside the application.
         pdf_bytes = None
         import pyperclip
         print("  Page could not be scraped (bot protection detected).")
         print("  1. Go to the job posting in your browser")
         print("  2. Select all text (Ctrl+A) then copy (Ctrl+C)")
-        print("  3. Come back here and press Enter — do NOT paste into this terminal\n")
+        print("  3. Come back here and press Enter - do NOT paste into this terminal\n")
         input()
         raw_text = pyperclip.paste()
         if not raw_text or not raw_text.strip():
-            raise RuntimeError("Clipboard is empty — copy the job page text first, then run again.")
+            raise RuntimeError("Clipboard is empty - copy the job page text first, then run again.")
 
     structured = _extract_with_llm(raw_text, url=url)
 
@@ -243,9 +243,9 @@ def _extract_with_llm(raw_text, url=""):
     prompt = f"""Extract structured job posting data from the text below.
 
 Return ONLY valid JSON with these keys:
-- "title": a clean, professional job title suitable for use in a cover letter. Start from the posted title but use the full description to resolve ambiguity — expand abbreviations (e.g. "Snr" → "Senior"), pick the most fitting option when multiple levels or slash-separated titles are listed, and infer the actual role when the posted title is generic (e.g. "Team Member – Corporate Finance" → "Corporate Finance Associate"). Do not invent seniority not supported by the description.
+- "title": a clean, professional job title suitable for use in a cover letter. Start from the posted title but use the full description to resolve ambiguity; expand abbreviations (e.g. "Snr" -> "Senior"), pick the most fitting option when multiple levels or slash-separated titles are listed, and infer the actual role when the posted title is generic (e.g. "Team Member - Corporate Finance" -> "Corporate Finance Associate"). Do not invent seniority not supported by the description.
 - "company": the commonly used short name for the hiring company, as a professional would write it in a cover letter. Strip legal suffixes (Berhad, Sdn Bhd, Pty Ltd, Ltd, Inc, Corp, Group, Holdings, etc.) unless they are part of the brand (e.g. "S&P Global" keeps "Global"). Use the well-known abbreviation or brand name when one exists (e.g. "RHB" not "RHB Banking Group", "Maybank" not "Malayan Banking Berhad"). Return "UNKNOWN" if you cannot determine the company with confidence (e.g. staffing agency or aggregator page).
-- "country": the physical country where this specific job is located (e.g. "Australia", "Malaysia", "United Kingdom"). Look for explicit location fields or city mentions in the posting (e.g. "Location: Kuala Lumpur" → "Malaysia"). Do NOT infer from the company's headquarters, the URL's regional path (e.g. /ca/en/ is a career portal region, not the job location), or the company's country of origin. Return null if the job location is not explicitly stated.
+- "country": the physical country where this specific job is located (e.g. "Australia", "Malaysia", "United Kingdom"). Look for explicit location fields or city mentions in the posting (e.g. "Location: Kuala Lumpur" -> "Malaysia"). Do NOT infer from the company's headquarters, the URL's regional path (e.g. /ca/en/ is a career portal region, not the job location), or the company's country of origin. Return null if the job location is not explicitly stated.
 - "intro": the introductory paragraph(s) before responsibilities/qualifications
 - "responsibilities": the responsibilities section text
 - "qualifications": the qualifications/requirements section text

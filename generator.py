@@ -2,6 +2,7 @@ import os
 import re
 import glob
 import shutil
+from copy import deepcopy
 from datetime import datetime
 from docx import Document
 from docx2pdf import convert
@@ -251,17 +252,65 @@ def clean_job_title(title: str) -> str:
 
     Example: 'Investment Analyst - Investments & Treasury NSW' -> 'Investment Analyst - Investments & Treasury'
     """
-    return _LOCATION_TOKENS.sub("", title).strip()
+    return _normalize_title_text(_LOCATION_TOKENS.sub("", title)).strip()
+
+
+_FORBIDDEN_DASH_PATTERN = re.compile(r"\s*(?:[\u2013\u2014\u2212]|--+)\s*")
+
+
+def _replace_forbidden_dashes(text, replacement=" - "):
+    cleaned = _FORBIDDEN_DASH_PATTERN.sub(replacement, str(text or ""))
+    cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    return cleaned
+
+
+def _normalize_title_text(text):
+    return _replace_forbidden_dashes(text, " - ").strip()
+
+
+def _normalize_generated_text(text):
+    return _replace_forbidden_dashes(text, " - ")
 
 
 def _set_para_text(para, text):
-    """Replace paragraph text preserving the first run's formatting (used for dates)."""
-    if para.runs:
-        para.runs[0].text = text
-        for run in para.runs[1:]:
-            run.text = ""
-    else:
-        para.add_run(text)
+    """Replace paragraph text while preserving paragraph and run-level formatting."""
+    anchor = _format_anchor_run(para)
+    for run in list(para.runs):
+        run._element.getparent().remove(run._element)
+    run = para.add_run(_normalize_generated_text(text))
+    _copy_run_properties(anchor, run)
+
+
+def _format_anchor_run(para):
+    visible_runs = [run for run in para.runs if run.text and run.text.strip()]
+    for run in visible_runs:
+        if not _looks_like_template_marker(run.text):
+            return run
+    if visible_runs:
+        return visible_runs[0]
+    return para.runs[0] if para.runs else None
+
+
+def _looks_like_template_marker(text):
+    cleaned = text.strip()
+    if cleaned == "_":
+        return True
+    if cleaned.startswith("[") and cleaned.endswith("]"):
+        return True
+    return bool(re.match(r"^\[?\s*(?:OPTIONAL|DESCRIPTION)\s*:", cleaned, flags=re.IGNORECASE))
+
+
+def _copy_run_properties(source_run, target_run):
+    if source_run is None:
+        return
+    source_rpr = source_run._element.rPr
+    if source_rpr is None:
+        return
+    target_rpr = target_run._element.rPr
+    if target_rpr is not None:
+        target_run._element.remove(target_rpr)
+    target_run._element.insert(0, deepcopy(source_rpr))
 
 
 # =============================================================================
@@ -494,7 +543,7 @@ def _clean_cover_letter_rewrite(text):
     cleaned = re.sub(r"\s*\bDESCRIPTION:\s*.*$", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
-    return cleaned
+    return _normalize_generated_text(cleaned)
 
 
 def _prepare_cover_letter_rewrite(raw_sentence, original_sentence):
@@ -544,7 +593,7 @@ def _extract_optional_final_sentence(text):
         cleaned = sentence_match.group(1).strip()
 
     cleaned = re.split(
-        r"\s+[-–—]\s+else\b|\s+else\s+delete\b",
+        r"\s+[-\u2013\u2014]\s+else\b|\s+else\s+delete\b",
         cleaned,
         maxsplit=1,
         flags=re.IGNORECASE,
@@ -584,17 +633,13 @@ def _rebold_title(para, title):
     """
     if not para.runs:
         return
-    text = para.runs[0].text
+    text = para.text
     if title not in text:
         return
     idx = text.index(title)
     before = text[:idx]
     after = text[idx + len(title):]
-
-    # Capture font properties from first run before nuking everything
-    run0 = para.runs[0]
-    font_name = run0.font.name
-    font_size = run0.font.size
+    anchor = _format_anchor_run(para)
 
     # Remove all existing runs from the paragraph XML
     for r in list(para.runs):
@@ -604,11 +649,8 @@ def _rebold_title(para, title):
         if not text:
             return
         r = para.add_run(text)
+        _copy_run_properties(anchor, r)
         r.bold = bold
-        if font_name:
-            r.font.name = font_name
-        if font_size:
-            r.font.size = font_size
 
     _add(before, False)
     _add(title, True)
@@ -617,6 +659,10 @@ def _rebold_title(para, title):
 
 def fill_cover_letter(path, company, title, intro, responsibilities, qualifications):
     doc = Document(path)
+    title = _normalize_title_text(title)
+    intro = _normalize_generated_text(intro)
+    responsibilities = _normalize_generated_text(responsibilities)
+    qualifications = _normalize_generated_text(qualifications)
     now = datetime.now()
     today = f"{now.day} {now.strftime('%B %Y')}"
 
@@ -653,7 +699,7 @@ def fill_cover_letter(path, company, title, intro, responsibilities, qualificati
     print(f"\n  Blanks found: {len(blank_items)}")
 
     numbered_lines = "\n".join(
-        f"{j+1}. {sentences[si]}"
+        f"{j+1}. {_normalize_generated_text(sentences[si])}"
         for j, (_, sentences, si, _) in enumerate(blank_items)
     )
 
@@ -673,16 +719,16 @@ Sentences to fill:
 {numbered_lines}
 
 Rules:
-- Return each sentence IN FULL with ONLY the blank(s) replaced -- do NOT change, remove, or rephrase any other word
-- Use EXACTLY "{company}" for the company name -- never modify it
-- Use EXACTLY "{title}" for the role -- never modify it
-- For [DESCRIPTION] blanks: replace the entire [DESCRIPTION] including brackets -- never include brackets in output
+- Return each sentence IN FULL with ONLY the blank(s) replaced; do NOT change, remove, or rephrase any other word
+- Use EXACTLY "{company}" for the company name; never modify it
+- Use EXACTLY "{title}" for the role; never modify it
+- For [DESCRIPTION] blanks: replace the entire [DESCRIPTION] including brackets; never include brackets in output
 - For OPTIONAL blanks: if the role mentions one of the optional examples, such as SAP, Oracle, IFRS, consolidations, or similar systems/standards, treat it as relevant and return one concrete final sentence
 - For OPTIONAL blanks: never return the OPTIONAL instruction itself; return either the final sentence or DELETE
 - Never include template labels or placeholders such as OPTIONAL, DESCRIPTION, [X], or [Y] in output
-- Draw on the job description above to write specific, natural-sounding content -- avoid generic filler
-- Keep fills concise -- one clause or short phrase for _, one sentence maximum for [DESCRIPTION] blanks
-- NEVER use em dashes (--) or en dashes (-)
+- Draw on the job description above to write specific, natural-sounding content; avoid generic filler
+- Keep fills concise: one clause or short phrase for _, one sentence maximum for [DESCRIPTION] blanks
+- Never use Unicode dash characters or double hyphens. Use commas, parentheses, semicolons, or ordinary hyphens only inside compound words.
 - Return ONLY the numbered sentences, nothing else"""
 
     response = call_llm(prompt, max_tokens=1000)
@@ -752,8 +798,11 @@ def fill_resume_markers(
         for idx, (_, sentence) in enumerate(marked_items, 1)
     )
 
-    title = data.get("title", "")
-    company = data.get("company", "")
+    title = _normalize_title_text(data.get("title", ""))
+    company = _normalize_generated_text(data.get("company", ""))
+    intro = _normalize_generated_text(data.get("intro", ""))
+    responsibilities = _normalize_generated_text(data.get("responsibilities", ""))
+    qualifications = _normalize_generated_text(data.get("qualifications", ""))
     aggression = get_resume_tailoring_aggression()
     source_text = load_resume_source(resume_source, category_dir=category_dir)
     raw_extended_text = load_resume_extended(category_dir=category_dir)
@@ -792,9 +841,9 @@ Company: {company}
 Aggression mode: {aggression}
 Aggression guidance: {_resume_aggression_guidance(aggression)}
 
-Job description: {data.get("intro", "")}
-Responsibilities: {data.get("responsibilities", "")}
-Qualifications: {data.get("qualifications", "")}
+Job description: {intro}
+Responsibilities: {responsibilities}
+Qualifications: {qualifications}
 
 {source_block}{extended_block}Only use facts from the resume factual source, the current resume sentence, or the job description. Use the extended source only for user-approved transferable phrasing. If a useful keyword is not truthfully supported, do not add it.
 
@@ -977,7 +1026,7 @@ def _clean_resume_rewrite(text):
         cleaned = sentence
     cleaned = re.sub(r"\s+([.,;:])", r"\1", cleaned)
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
-    return cleaned.strip()
+    return _normalize_generated_text(cleaned)
 
 
 # =============================================================================
@@ -1196,7 +1245,7 @@ def shorten_docx_for_page_limit(
         return (0, []) if return_changed_indices else 0
 
     numbered_lines = "\n".join(
-        f"{idx}. {para.text.strip()}"
+        f"{idx}. {_normalize_generated_text(para.text.strip())}"
         for idx, para in items
     )
     retain_percent = int(min_ratio * 100)
@@ -1226,7 +1275,7 @@ Rules:
     for line in response.splitlines():
         m = re.match(r"^(\d+)\.\s*(.+)$", line.strip())
         if m:
-            rewrites[int(m.group(1))] = m.group(2).strip()
+            rewrites[int(m.group(1))] = _normalize_generated_text(m.group(2).strip())
 
     changed = 0
     changed_indices = []
@@ -1250,7 +1299,7 @@ Rules:
         for line in repair_response.splitlines():
             m = re.match(r"^(\d+)\.\s*(.+)$", line.strip())
             if m:
-                repair_rewrites[int(m.group(1))] = m.group(2).strip()
+                repair_rewrites[int(m.group(1))] = _normalize_generated_text(m.group(2).strip())
 
         for idx, para in items:
             old_text = para.text.strip()

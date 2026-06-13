@@ -21,7 +21,7 @@ _LOCATIONS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "loca
 
 def _load_locations() -> dict:
     if not os.path.exists(_LOCATIONS_PATH):
-        print("  WARNING: locations.json not found — auto-detection disabled. Copy locations.example.json to locations.json to enable it.")
+        print("  WARNING: locations.json not found - auto-detection disabled. Copy locations.example.json to locations.json to enable it.")
         return {}
     with open(_LOCATIONS_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -126,7 +126,7 @@ def _process(url):
 
     proceed = questionary.select(
         "Proceed with these?",
-        choices=["Yes", "No — edit title", "No — edit company", "No — edit title and company", "No — edit category", "No — edit all"],
+        choices=["Yes", "No - edit title", "No - edit company", "No - edit title and company", "No - edit category", "No - edit all"],
     ).ask()
 
     if proceed and proceed.startswith("No"):

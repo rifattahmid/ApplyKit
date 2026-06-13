@@ -1,4 +1,4 @@
-# Internal tuning constants. Not user-facing — change only if you know what
+# Internal tuning constants. Not user-facing - change only if you know what
 # you're doing. User config lives in config.py.
 
 
