@@ -2,8 +2,8 @@ import os
 import re
 import glob
 import shutil
-from copy import deepcopy
 from datetime import datetime
+from difflib import SequenceMatcher
 from docx import Document
 from docx2pdf import convert
 from pypdf import PdfReader, PdfWriter
@@ -274,43 +274,92 @@ def _normalize_generated_text(text):
 
 
 def _set_para_text(para, text):
-    """Replace paragraph text while preserving paragraph and run-level formatting."""
-    anchor = _format_anchor_run(para)
-    for run in list(para.runs):
-        run._element.getparent().remove(run._element)
-    run = para.add_run(_normalize_generated_text(text))
-    _copy_run_properties(anchor, run)
+    """Replace all visible paragraph text without rebuilding paragraph XML."""
+    _replace_text_with_diff_preserving_runs(
+        para,
+        0,
+        para.text,
+        _normalize_generated_text(text),
+    )
 
 
-def _format_anchor_run(para):
-    visible_runs = [run for run in para.runs if run.text and run.text.strip()]
-    for run in visible_runs:
-        if not _looks_like_template_marker(run.text):
-            return run
-    if visible_runs:
-        return visible_runs[0]
-    return para.runs[0] if para.runs else None
+def _replace_text_once_preserving_runs(para, old_text, new_text):
+    start = para.text.find(old_text)
+    if start < 0:
+        return False
+    _replace_text_with_diff_preserving_runs(
+        para,
+        start,
+        old_text,
+        _normalize_generated_text(new_text),
+    )
+    return True
 
 
-def _looks_like_template_marker(text):
-    cleaned = text.strip()
-    if cleaned == "_":
-        return True
-    if cleaned.startswith("[") and cleaned.endswith("]"):
-        return True
-    return bool(re.match(r"^\[?\s*(?:OPTIONAL|DESCRIPTION)\s*:", cleaned, flags=re.IGNORECASE))
+def _delete_text_once_preserving_runs(para, old_text):
+    current = para.text
+    start = current.find(old_text)
+    if start < 0:
+        return False
+    end = start + len(old_text)
+    if start > 0 and current[start - 1].isspace():
+        start -= 1
+    elif end < len(current) and current[end].isspace():
+        end += 1
+    _replace_para_text_range(para, start, end, "")
+    return True
 
 
-def _copy_run_properties(source_run, target_run):
-    if source_run is None:
+def _replace_text_with_diff_preserving_runs(para, offset, old_text, new_text):
+    matcher = SequenceMatcher(None, old_text, new_text, autojunk=False)
+    for tag, i1, i2, j1, j2 in reversed(matcher.get_opcodes()):
+        if tag == "equal":
+            continue
+        _replace_para_text_range(para, offset + i1, offset + i2, new_text[j1:j2])
+
+
+def _replace_para_text_range(para, start, end, replacement):
+    replacement = _normalize_generated_text(replacement)
+    text_length = len(para.text)
+    start = max(0, min(start, text_length))
+    end = max(start, min(end, text_length))
+    runs = list(para.runs)
+    if not runs:
+        para.add_run(replacement)
         return
-    source_rpr = source_run._element.rPr
-    if source_rpr is None:
+
+    if start == end:
+        pos = 0
+        for run in runs:
+            run_text = run.text
+            run_end = pos + len(run_text)
+            if pos <= start <= run_end:
+                local = start - pos
+                run.text = f"{run_text[:local]}{replacement}{run_text[local:]}"
+                return
+            pos = run_end
+        runs[-1].text += replacement
         return
-    target_rpr = target_run._element.rPr
-    if target_rpr is not None:
-        target_run._element.remove(target_rpr)
-    target_run._element.insert(0, deepcopy(source_rpr))
+
+    pos = 0
+    inserted = False
+    for run in runs:
+        run_text = run.text
+        run_start = pos
+        run_end = pos + len(run_text)
+        pos = run_end
+        if run_end <= start or run_start >= end:
+            continue
+
+        local_start = max(start - run_start, 0)
+        local_end = min(end - run_start, len(run_text))
+        before = run_text[:local_start]
+        after = run_text[local_end:]
+        if not inserted:
+            run.text = before + replacement + (after if end <= run_end else "")
+            inserted = True
+        else:
+            run.text = after if end <= run_end else ""
 
 
 # =============================================================================
@@ -620,43 +669,6 @@ def _ensure_sentence_punctuation(text):
     return cleaned
 
 
-def _join_cover_letter_sentences(sentences):
-    return " ".join(s.strip() for s in sentences if s and s.strip())
-
-
-def _rebold_title(para, title):
-    """After _set_para_text, rebuild paragraph runs cleanly so the title is bold.
-
-    Strips all existing runs from the XML (instead of leaving empty leftovers) and
-    rebuilds with at most 3 runs: before (regular), title (bold), after (regular).
-    The leftover-empty-run approach was fragile across Word/python-docx versions.
-    """
-    if not para.runs:
-        return
-    text = para.text
-    if title not in text:
-        return
-    idx = text.index(title)
-    before = text[:idx]
-    after = text[idx + len(title):]
-    anchor = _format_anchor_run(para)
-
-    # Remove all existing runs from the paragraph XML
-    for r in list(para.runs):
-        r._element.getparent().remove(r._element)
-
-    def _add(text, bold):
-        if not text:
-            return
-        r = para.add_run(text)
-        _copy_run_properties(anchor, r)
-        r.bold = bold
-
-    _add(before, False)
-    _add(title, True)
-    _add(after, False)
-
-
 def fill_cover_letter(path, company, title, intro, responsibilities, qualifications):
     doc = Document(path)
     title = _normalize_title_text(title)
@@ -669,8 +681,9 @@ def fill_cover_letter(path, company, title, intro, responsibilities, qualificati
     # Replace dates
     date_replaced = False
     for para in _iter_all_paragraphs(doc):
-        if DATE_PATTERN.search(para.text):
-            _set_para_text(para, DATE_PATTERN.sub(today, para.text))
+        date_match = DATE_PATTERN.search(para.text)
+        if date_match:
+            _replace_para_text_range(para, date_match.start(), date_match.end(), today)
             print(f"  Date:          {today}")
             date_replaced = True
     if not date_replaced:
@@ -751,19 +764,14 @@ Rules:
         )
         if should_delete:
             print(f"    {j+1}. (deleted optional instruction)")
-            sentences[si] = ""
-            new_text = _join_cover_letter_sentences(sentences)
-            _set_para_text(para, new_text)
+            _delete_text_once_preserving_runs(para, sentences[si])
             continue
         if not new_sentence:
             print(f"    {j+1}. WARNING: rewrite was empty after cleanup")
             continue
         print(f"    {j+1}. {new_sentence}")
-        sentences[si] = new_sentence
-        new_text = _join_cover_letter_sentences(sentences)
-        _set_para_text(para, new_text)
-        if title in new_text and para.runs:
-            _rebold_title(para, title)
+        if not _replace_text_once_preserving_runs(para, sentences[si], new_sentence):
+            print(f"    {j+1}. WARNING: original sentence not found in document")
 
     print()
     doc.save(path)
