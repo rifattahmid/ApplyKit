@@ -669,6 +669,56 @@ def _ensure_sentence_punctuation(text):
     return cleaned
 
 
+def _parse_cover_letter_rewrites(response):
+    rewrites = {}
+    for line in response.splitlines():
+        m = re.match(r"^(\d+)\s*(?:[.)]|[-:])\s*(.+)$", line.strip())
+        if m:
+            idx = int(m.group(1)) - 1
+            if idx >= 0:
+                rewrites[idx] = m.group(2).strip()
+    return rewrites
+
+
+def _cover_letter_missing_rewrites_prompt(
+    missing_items,
+    *,
+    company,
+    title,
+    intro,
+    responsibilities,
+    qualifications,
+):
+    numbered_lines = "\n".join(
+        f"{idx + 1}. {_normalize_generated_text(sentence)}"
+        for idx, sentence in missing_items
+    )
+    return f"""Missing required cover-letter rewrites.
+
+The previous response omitted these numbered sentence(s). Fill every missing sentence now.
+
+Role: {title}
+Company (USE EXACTLY THIS): {company}
+
+Job description: {intro}
+Responsibilities: {responsibilities}
+Qualifications: {qualifications}
+
+Sentences to fill:
+{numbered_lines}
+
+Rules:
+- Return each listed sentence IN FULL with ONLY the blank(s) replaced
+- Use EXACTLY "{company}" for the company name; never modify it
+- Use EXACTLY "{title}" for the role; never modify it
+- Replace _ with company/role-specific wording
+- Replace any non-optional bracketed instruction with final cover-letter wording; never leave brackets in output
+- For OPTIONAL blanks, return either the final sentence or DELETE
+- Never use Unicode dash characters or double hyphens
+- Return every listed number, preserving the original number
+- Return ONLY the numbered sentences, nothing else"""
+
+
 def fill_cover_letter(path, company, title, intro, responsibilities, qualifications):
     doc = Document(path)
     title = _normalize_title_text(title)
@@ -716,9 +766,10 @@ def fill_cover_letter(path, company, title, intro, responsibilities, qualificati
         for j, (_, sentences, si, _) in enumerate(blank_items)
     )
 
-    prompt = f"""Fill in the blank(s) in each numbered sentence below. There are three blank types:
+    prompt = f"""Fill in the blank(s) in each numbered sentence below. There are four blank types:
 - _ (underscore): replace with company/role-specific content (e.g. company name, what the company does, why the applicant is drawn to this role)
 - [DESCRIPTION]: replace the entire [DESCRIPTION] bracket (including the brackets) with content matching that description, written as a natural continuation of the sentence
+- [INSTRUCTION TEXT]: Any other bracketed instruction is a required fill. Replace the entire bracketed instruction with final cover-letter wording that follows the instruction. Use examples inside the bracket only as hints; do not copy all examples.
 - [OPTIONAL: ...] or OPTIONAL: ...: if the optional instruction is directly relevant to the role, replace the entire optional instruction with one concise natural sentence. If it is not directly relevant, return DELETE for that numbered item.
 
 Role: {title}
@@ -736,21 +787,34 @@ Rules:
 - Use EXACTLY "{company}" for the company name; never modify it
 - Use EXACTLY "{title}" for the role; never modify it
 - For [DESCRIPTION] blanks: replace the entire [DESCRIPTION] including brackets; never include brackets in output
+- For [INSTRUCTION TEXT] blanks: replace the entire bracketed instruction including brackets; never include brackets in output
+- Non-optional bracketed instructions are required fills; never return DELETE for them
 - For OPTIONAL blanks: if the role mentions one of the optional examples, such as SAP, Oracle, IFRS, consolidations, or similar systems/standards, treat it as relevant and return one concrete final sentence
 - For OPTIONAL blanks: never return the OPTIONAL instruction itself; return either the final sentence or DELETE
 - Never include template labels or placeholders such as OPTIONAL, DESCRIPTION, [X], or [Y] in output
 - Draw on the job description above to write specific, natural-sounding content; avoid generic filler
-- Keep fills concise: one clause or short phrase for _, one sentence maximum for [DESCRIPTION] blanks
+- Keep fills concise: one clause or short phrase for _, one sentence maximum for [DESCRIPTION] and [INSTRUCTION TEXT] blanks
 - Never use Unicode dash characters or double hyphens. Use commas, parentheses, semicolons, or ordinary hyphens only inside compound words.
+- Return every numbered sentence. Do not omit any number.
 - Return ONLY the numbered sentences, nothing else"""
 
     response = call_llm(prompt, max_tokens=1000)
-
-    rewrites = {}
-    for line in response.splitlines():
-        m = re.match(r'^(\d+)\.\s*(.+)$', line.strip())
-        if m:
-            rewrites[int(m.group(1)) - 1] = m.group(2).strip()
+    rewrites = _parse_cover_letter_rewrites(response)
+    missing_items = [
+        (j, sentences[si])
+        for j, (_, sentences, si, _) in enumerate(blank_items)
+        if j not in rewrites
+    ]
+    if missing_items:
+        repair_prompt = _cover_letter_missing_rewrites_prompt(
+            missing_items,
+            company=company,
+            title=title,
+            intro=intro,
+            responsibilities=responsibilities,
+            qualifications=qualifications,
+        )
+        rewrites.update(_parse_cover_letter_rewrites(call_llm(repair_prompt, max_tokens=800)))
 
     print(f"\n  Filled:")
     for j, (para, sentences, si, had_bold_blank) in enumerate(blank_items):
