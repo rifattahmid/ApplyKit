@@ -11,6 +11,13 @@ from constants import (
 from llm import call_llm
 
 
+POSTING_CONTEXTS = {
+    "direct_employer",
+    "agency_for_named_client",
+    "agency_for_unknown_client",
+}
+
+
 # =============================================================================
 # URL Fallback Helpers
 # =============================================================================
@@ -42,6 +49,45 @@ def _title_from_url(url):
     path = url.rstrip("/").split("/")[-1]
     slug = re.sub(r"_\d{4}-\d+$", "", path)   # strip trailing job-id like _2026-15510
     return slug.replace("-", " ").strip() or None
+
+
+def _clean_optional_text(value):
+    if value is None:
+        return None
+    cleaned = str(value).strip()
+    if not cleaned or cleaned.lower() in {"unknown", "null", "none", "n/a"}:
+        return None
+    return cleaned
+
+
+def _normalized_posting_context(structured, company):
+    context = str(structured.get("posting_context") or "direct_employer").strip().lower()
+    if context not in POSTING_CONTEXTS:
+        context = "direct_employer"
+
+    posting_company = _clean_optional_text(structured.get("posting_company"))
+    client_company = _clean_optional_text(structured.get("client_company"))
+    reference = _clean_optional_text(structured.get("cover_letter_company_reference"))
+
+    if context == "agency_for_named_client" and not client_company:
+        context = "agency_for_unknown_client"
+
+    if context == "agency_for_named_client":
+        company = client_company
+        reference = client_company
+    elif context == "agency_for_unknown_client":
+        posting_company = posting_company or company
+        company = posting_company or company
+        if not reference or (posting_company and reference.lower() == posting_company.lower()):
+            reference = "your client"
+        client_company = None
+    else:
+        context = "direct_employer"
+        posting_company = None
+        client_company = None
+        reference = company
+
+    return company, posting_company, context, client_company, reference
 
 
 # =============================================================================
@@ -128,10 +174,18 @@ def scrape_job(url):
         company = _company_from_url(url) or "UNKNOWN"
 
     title = structured.get("title", "") or _title_from_url(url) or ""
+    company, posting_company, posting_context, client_company, reference = _normalized_posting_context(
+        structured,
+        company,
+    )
 
     return {
         "title": title,
         "company": company,
+        "posting_company": posting_company,
+        "posting_context": posting_context,
+        "client_company": client_company,
+        "cover_letter_company_reference": reference,
         "country": structured.get("country"),
         "description": raw_text,
         "intro": structured.get("intro", ""),
@@ -244,7 +298,11 @@ def _extract_with_llm(raw_text, url=""):
 
 Return ONLY valid JSON with these keys:
 - "title": a clean, professional job title suitable for use in a cover letter. Start from the posted title but use the full description to resolve ambiguity; expand abbreviations (e.g. "Snr" -> "Senior"), pick the most fitting option when multiple levels or slash-separated titles are listed, and infer the actual role when the posted title is generic (e.g. "Team Member - Corporate Finance" -> "Corporate Finance Associate"). Do not invent seniority not supported by the description.
-- "company": the commonly used short name for the hiring company, as a professional would write it in a cover letter. Strip legal suffixes (Berhad, Sdn Bhd, Pty Ltd, Ltd, Inc, Corp, Group, Holdings, etc.) unless they are part of the brand (e.g. "S&P Global" keeps "Global"). Use the well-known abbreviation or brand name when one exists (e.g. "RHB" not "RHB Banking Group", "Maybank" not "Malayan Banking Berhad"). Return "UNKNOWN" if you cannot determine the company with confidence (e.g. staffing agency or aggregator page).
+- "company": the commonly used short name for the employer or output folder. For direct employers, use the hiring company. For agency postings with a named client, use the client company. For agency postings with an unnamed client, use the recruiter, staffing firm, HR firm, or posting firm if known. Strip legal suffixes (Berhad, Sdn Bhd, Pty Ltd, Ltd, Inc, Corp, Group, Holdings, etc.) unless they are part of the brand (e.g. "S&P Global" keeps "Global"). Use the well-known abbreviation or brand name when one exists (e.g. "RHB" not "RHB Banking Group", "Maybank" not "Malayan Banking Berhad"). Return "UNKNOWN" only if neither the employer/client nor the posting firm can be determined with confidence.
+- "posting_context": one of "direct_employer", "agency_for_named_client", or "agency_for_unknown_client". Use "agency_for_named_client" only when a recruiter, staffing firm, HR firm, or agency is posting for a named client or says it is acting on behalf of a named client. Use "agency_for_unknown_client" when the posting says "our client", "on behalf of our client", "client firm", or similar third-party client wording but does not name the client. Use "direct_employer" when the company appears to be hiring for itself, including recruitment or HR companies hiring their own employees with no third-party client wording.
+- "posting_company": the recruiter, staffing firm, HR firm, agency, or posting firm when the posting is for a client. Return null for direct employer postings or if the posting firm cannot be identified.
+- "client_company": the named client company only when explicitly stated. Return null if the client is unnamed or if this is a direct employer posting.
+- "cover_letter_company_reference": the exact employer/client phrase to use in a cover letter. For direct employers use the company name. For named clients use the client company name. For unnamed client postings use "your client".
 - "country": the physical country where this specific job is located (e.g. "Australia", "Malaysia", "United Kingdom"). Look for explicit location fields or city mentions in the posting (e.g. "Location: Kuala Lumpur" -> "Malaysia"). Do NOT infer from the company's headquarters, the URL's regional path (e.g. /ca/en/ is a career portal region, not the job location), or the company's country of origin. Return null if the job location is not explicitly stated.
 - "intro": the introductory paragraph(s) before responsibilities/qualifications
 - "responsibilities": the responsibilities section text
@@ -292,6 +350,10 @@ def _json_repair_prompt(raw, error):
 Return ONLY one valid JSON object with these keys:
 - "title"
 - "company"
+- "posting_context"
+- "posting_company"
+- "client_company"
+- "cover_letter_company_reference"
 - "country"
 - "intro"
 - "responsibilities"

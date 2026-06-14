@@ -688,7 +688,12 @@ def _cover_letter_missing_rewrites_prompt(
     intro,
     responsibilities,
     qualifications,
+    company_reference=None,
+    posting_context="direct_employer",
 ):
+    company = _normalize_generated_text(company)
+    company_reference = _normalize_generated_text(company_reference or company)
+    context_rules = _cover_letter_agency_context_rules(posting_context)
     numbered_lines = "\n".join(
         f"{idx + 1}. {_normalize_generated_text(sentence)}"
         for idx, sentence in missing_items
@@ -698,7 +703,8 @@ def _cover_letter_missing_rewrites_prompt(
 The previous response omitted these numbered sentence(s). Fill every missing sentence now.
 
 Role: {title}
-Company (USE EXACTLY THIS): {company}
+Company/folder name: {company}
+Cover-letter employer reference (USE EXACTLY THIS): {company_reference}
 
 Job description: {intro}
 Responsibilities: {responsibilities}
@@ -706,12 +712,13 @@ Qualifications: {qualifications}
 
 Sentences to fill:
 {numbered_lines}
+{context_rules}
 
 Rules:
 - Return each listed sentence IN FULL with ONLY the blank(s) replaced
-- Use EXACTLY "{company}" for the company name; never modify it
+- Use EXACTLY "{company_reference}" for company, employer, or client references; never modify it
 - Use EXACTLY "{title}" for the role; never modify it
-- Replace _ with company/role-specific wording
+- Replace _ with employer/role-specific wording
 - Replace any non-optional bracketed instruction with final cover-letter wording; never leave brackets in output
 - For OPTIONAL blanks, return either the final sentence or DELETE
 - Never use Unicode dash characters or double hyphens
@@ -719,12 +726,37 @@ Rules:
 - Return ONLY the numbered sentences, nothing else"""
 
 
-def fill_cover_letter(path, company, title, intro, responsibilities, qualifications):
+def _cover_letter_agency_context_rules(posting_context):
+    if str(posting_context or "").strip().lower() != "agency_for_unknown_client":
+        return ""
+    return """
+
+Agency/client context:
+- This is an agency posting for an unnamed client.
+- Use the cover-letter employer reference, not the posting company, when filling company/employer blanks.
+- Do not describe the posting company as the employer.
+- Avoid company/sector-specific claims unless the client context is stated in the job posting."""
+
+
+def fill_cover_letter(
+    path,
+    company,
+    title,
+    intro,
+    responsibilities,
+    qualifications,
+    *,
+    company_reference=None,
+    posting_context="direct_employer",
+):
     doc = Document(path)
+    company = _normalize_generated_text(company)
+    company_reference = _normalize_generated_text(company_reference or company)
     title = _normalize_title_text(title)
     intro = _normalize_generated_text(intro)
     responsibilities = _normalize_generated_text(responsibilities)
     qualifications = _normalize_generated_text(qualifications)
+    context_rules = _cover_letter_agency_context_rules(posting_context)
     now = datetime.now()
     today = f"{now.day} {now.strftime('%B %Y')}"
 
@@ -773,7 +805,8 @@ def fill_cover_letter(path, company, title, intro, responsibilities, qualificati
 - [OPTIONAL: ...] or OPTIONAL: ...: if the optional instruction is directly relevant to the role, replace the entire optional instruction with one concise natural sentence. If it is not directly relevant, return DELETE for that numbered item.
 
 Role: {title}
-Company (USE EXACTLY THIS): {company}
+Company/folder name: {company}
+Cover-letter employer reference (USE EXACTLY THIS): {company_reference}
 
 Job description: {intro}
 Responsibilities: {responsibilities}
@@ -781,10 +814,11 @@ Qualifications: {qualifications}
 
 Sentences to fill:
 {numbered_lines}
+{context_rules}
 
 Rules:
 - Return each sentence IN FULL with ONLY the blank(s) replaced; do NOT change, remove, or rephrase any other word
-- Use EXACTLY "{company}" for the company name; never modify it
+- Use EXACTLY "{company_reference}" for company, employer, or client references; never modify it
 - Use EXACTLY "{title}" for the role; never modify it
 - For [DESCRIPTION] blanks: replace the entire [DESCRIPTION] including brackets; never include brackets in output
 - For [INSTRUCTION TEXT] blanks: replace the entire bracketed instruction including brackets; never include brackets in output
@@ -809,6 +843,8 @@ Rules:
         repair_prompt = _cover_letter_missing_rewrites_prompt(
             missing_items,
             company=company,
+            company_reference=company_reference,
+            posting_context=posting_context,
             title=title,
             intro=intro,
             responsibilities=responsibilities,
@@ -1473,9 +1509,19 @@ def _merge_cover_letter_bundle(cover_pdf: str, output_folder: str):
 # Application Orchestration
 # =============================================================================
 
+def _cover_letter_company_reference(data):
+    context = str(data.get("posting_context") or "direct_employer").strip().lower()
+    reference = str(data.get("cover_letter_company_reference") or "").strip()
+    if context == "agency_for_unknown_client":
+        return reference or "your client"
+    return reference or data.get("company", "")
+
+
 def generate_application(data, category=None):
     title = clean_job_title(data["title"])
     company = data["company"]
+    company_reference = _cover_letter_company_reference(data)
+    posting_context = data.get("posting_context", "direct_employer")
     generation_warnings = []
 
     if category is None:
@@ -1527,6 +1573,8 @@ def generate_application(data, category=None):
         data.get("intro", ""),
         data.get("responsibilities", ""),
         data.get("qualifications", ""),
+        company_reference=company_reference,
+        posting_context=posting_context,
     )
 
     pdf_dest = get_cover_letter_pdf_path(cover_dest)

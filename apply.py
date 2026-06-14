@@ -121,6 +121,12 @@ def _process(url):
     # Final review: title, company, category
     print(f"  Title:    {data.get('title', '')}")
     print(f"  Company:  {data.get('company', 'UNKNOWN')}")
+    posting_context = data.get("posting_context", "direct_employer")
+    posting_company = data.get("posting_company")
+    if posting_company:
+        print(f"  Posted by: {posting_company}")
+    if posting_context != "direct_employer":
+        print(f"  Posting:  {posting_context.replace('_', ' ')}")
     print(f"  Category: {category}")
     print()
 
